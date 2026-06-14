@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Scale, AlertTriangle, Play, ExternalLink } from "lucide-react";
+import { Scale, AlertTriangle, Play, ExternalLink, Clock } from "lucide-react";
 import { useGenLayer } from "@/lib/genlayer/useGenLayer";
 import { useWager, useSettlement } from "@/hooks/useOddLockReads";
 import { useOddLockWrites } from "@/hooks/useOddLockWrites";
@@ -64,6 +64,7 @@ export default function SettlePage() {
   const perms = useOddLockPermissions(wager);
 
   const deadlinePassed = wager ? Date.now() > wager.eventDeadline : false;
+  const settlementOpensAtPassed = wager ? Date.now() >= wager.settlementOpensAt : false;
   const alreadyResolved = wager ? ["RESOLVED", "DISPUTED", "FINALIZED"].includes(wager.status) : false;
   const busy = txStatus === "signing" || txStatus === "pending";
 
@@ -186,10 +187,23 @@ export default function SettlePage() {
             </div>
           )}
 
-          {!perms.canTriggerResolution && !perms.canOpenSettlement && (
+          {wager.status === "LOCKED" && deadlinePassed && !settlementOpensAtPassed && (
+            <div className="rounded p-4 text-center space-y-2" style={{ border: "1px solid rgba(200,155,60,0.25)", background: "rgba(200,155,60,0.06)" }}>
+              <div className="flex items-center justify-center gap-2">
+                <Clock className="h-4 w-4" style={{ color: "var(--dispute-signal)" }} />
+                <span className="font-exo text-xs tracking-widest" style={{ color: "var(--dispute-signal)" }}>SETTLEMENT WINDOW NOT YET OPEN</span>
+              </div>
+              <p className="font-nunito text-sm" style={{ color: "var(--dim-label)" }}>
+                The event deadline has passed, but settlement opens at{" "}
+                <span className="font-azeret">{new Date(wager.settlementOpensAt).toLocaleString()}</span>.
+              </p>
+            </div>
+          )}
+
+          {!perms.canTriggerResolution && !perms.canOpenSettlement && deadlinePassed && settlementOpensAtPassed && !perms.isParticipant && (
             <div className="rounded p-4 text-center" style={{ border: "1px solid var(--glass-line)", background: "var(--soft-panel)" }}>
               <p className="font-nunito text-sm" style={{ color: "var(--dim-label)" }}>
-                You do not have permission to trigger resolution for this capsule.
+                You are not a party to this capsule. Only participants, admins, or keepers can trigger resolution.
               </p>
             </div>
           )}
