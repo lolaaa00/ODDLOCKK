@@ -38,15 +38,24 @@ export default function SettlePage() {
   const { isConnected } = useGenLayer();
   const contractReady = isContractConfigured();
 
-  // Contract reads
-  const { data: wager, loading: wagerLoading, refetch: refetchWager } = useWager(id);
-  const { data: settlement } = useSettlement(wager?.settlementReportId);
-
-  // Local draft fallback
+  // Local draft fallback — resolve contractWagerId if this is a draft ID
   const [draftFallback, setDraftFallback] = useState<LocalDraft | null>(null);
+  const [draftChecked, setDraftChecked] = useState(false);
   useEffect(() => {
     setDraftFallback(getDrafts().find((d) => d.draftId === id) ?? null);
+    setDraftChecked(true);
   }, [id]);
+
+  // Resolve the on-chain wager ID: use contractWagerId from draft if available.
+  // Wait for draft check to avoid flash errors.
+  const contractWagerId = draftFallback?.contractWagerId || "";
+  const onChainId = !draftChecked
+    ? undefined
+    : contractWagerId || (draftFallback ? undefined : id);
+
+  // Contract reads
+  const { data: wager, loading: wagerLoading, refetch: refetchWager } = useWager(onChainId);
+  const { data: settlement } = useSettlement(wager?.settlementReportId);
 
   // Writes
   const { txStatus, txHash, txError, canWrite, openSettlement, requestSettlement } = useOddLockWrites();

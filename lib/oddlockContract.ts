@@ -285,12 +285,23 @@ async function execWrite(
   });
 
   const client = getWriteClient(provider);
+  // genlayer-js accesses account.address internally — passing a raw string
+  // causes .address to be undefined, which viem rejects as an invalid address.
+  const accountObj = { address: account, type: "json-rpc" as const };
+
+  console.log(`[OddLock:DEBUG] ${method} pre-writeContract`, {
+    expectedArgCount: args.length,
+    actualArgs: args.map((a, i) => `[${i}] ${typeof a}: ${String(a).slice(0, 80)}`),
+    accountObj,
+    contractAddress: CONTRACT_ADDRESS,
+  });
+
   const hash = await client.writeContract({
     address: CONTRACT_ADDRESS as Address,
     functionName: method,
     args,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    account: account as any,
+    account: accountObj as any,
     value,
   });
 

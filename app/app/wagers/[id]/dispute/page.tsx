@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
@@ -7,8 +8,9 @@ import { useWager, useDispute } from "@/hooks/useOddLockReads";
 import { useOddLockWrites } from "@/hooks/useOddLockWrites";
 import { useOddLockPermissions } from "@/hooks/useOddLockPermissions";
 import { isContractConfigured } from "@/lib/genlayerClient";
+import { getDrafts } from "@/lib/storage/drafts";
 import { DisputeBench } from "@/components/disputes/DisputeBench";
-import type { DisputeReport } from "@/types/wager";
+import type { DisputeReport, LocalDraft } from "@/types/wager";
 import type { OnChainDispute } from "@/lib/oddlockContract";
 
 function toDisputeReport(d: OnChainDispute): DisputeReport {
@@ -30,8 +32,21 @@ export default function DisputePage() {
   const { id } = useParams<{ id: string }>();
   const contractReady = isContractConfigured();
 
+  // Resolve draft ID → on-chain ID
+  const [draftFallback, setDraftFallback] = useState<LocalDraft | null>(null);
+  const [draftChecked, setDraftChecked] = useState(false);
+  useEffect(() => {
+    setDraftFallback(getDrafts().find((d) => d.draftId === id) ?? null);
+    setDraftChecked(true);
+  }, [id]);
+
+  const contractWagerId = draftFallback?.contractWagerId || "";
+  const onChainId = !draftChecked
+    ? undefined
+    : contractWagerId || (draftFallback ? undefined : id);
+
   // Contract reads
-  const { data: wager, loading, refetch: refetchWager } = useWager(id);
+  const { data: wager, loading, refetch: refetchWager } = useWager(onChainId);
   const { data: dispute } = useDispute(wager?.disputeReportId);
 
   // Writes

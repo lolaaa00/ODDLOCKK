@@ -16,7 +16,10 @@ import {
   EXPLORER_URL, CONTRACT_ADDRESS, CHAIN_ID, isContractConfigured,
 } from "@/lib/genlayerClient";
 import { isAddress } from "viem";
-import { writeCreateWager, waitForTx } from "@/lib/oddlockContract";
+import {
+  writeCreateWager, waitForTx, readGetUserWagers, readGetWager,
+  type OnChainWager,
+} from "@/lib/oddlockContract";
 import { validateTerms } from "@/utils/oddlockArgs";
 import { TermsLockPanel } from "@/components/wagers/TermsLockPanel";
 import { StakeTestUnitBox } from "@/components/wagers/StakeTestUnitBox";
@@ -31,14 +34,21 @@ export default function WagerDetailPage() {
   const router = useRouter();
   const { address, provider, isConnected, canWrite } = useGenLayer();
 
-  // Local draft
+  // Local draft — load from localStorage after mount to avoid SSR hydration mismatch.
   const [draft, setDraft] = useState<LocalDraft | null>(null);
+  const [draftChecked, setDraftChecked] = useState(false);
   useEffect(() => {
     setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
+    setDraftChecked(true);
   }, [id]);
 
-  // If draft is published, use its contractWagerId for on-chain reads
-  const onChainId = draft?.contractWagerId ?? (draft ? undefined : id);
+  // Resolve the on-chain wager ID.
+  // Don't resolve until draftChecked to avoid a flash fetch with the raw URL id.
+  // contractWagerId is always a real wager_* ID (never pending_*) after publish.
+  const contractWagerId = draft?.contractWagerId || "";
+  const onChainId = !draftChecked
+    ? undefined                              // wait for localStorage check
+    : contractWagerId || (draft ? undefined : id);
 
   // Contract reads — only fetch if we have a contractWagerId or this isn't a draft
   const { data: wager, loading, error: loadError, refetch } = useWager(onChainId);
@@ -71,8 +81,8 @@ export default function WagerDetailPage() {
   const perms = useOddLockPermissions(wager);
 
   const busy = txStatus === "signing" || txStatus === "pending";
-  const isPublished = !!draft?.contractWagerId;
-  const isDraftLocal = draft && !draft.contractWagerId;
+  const isPublished = !!contractWagerId; // true when we have a real on-chain ID
+  const isDraftLocal = draft && !contractWagerId; // no contractWagerId at all
 
   // ── Publish handler ──────────────────────────────────────────────────────
   async function handlePublish() {
@@ -154,48 +164,97 @@ export default function WagerDetailPage() {
       setPublishHash(hash);
       setPublishStatus("pending");
 
-      // Wait for tx receipt — the return value from create_wager is the contractWagerId
+      // Wait for tx receipt
       const receipt = await waitForTx(hash);
+      console.log("[OddLock:PUBLISH] Receipt:", receipt);
 
-      // Extract contractWagerId from the receipt
-      // GenLayer returns the function result in the receipt
+      // ── Discover real wager ID ─────────────────────────────────────
+      // GenLayer may return the wager_id in the receipt, or we discover
+      // it by fetching the user's wager list and matching by properties.
       let contractWagerId = "";
+
+      // Attempt 1: extract from receipt fields
       if (receipt && typeof receipt === "object") {
         const r = receipt as Record<string, unknown>;
-        // genlayer-js typically returns the result in receipt.result or the decoded return
-        if (typeof r.result === "string") {
+        if (typeof r.result === "string" && r.result.startsWith("wager_")) {
           contractWagerId = r.result;
-        } else if (typeof r.data === "string") {
+        } else if (typeof r.data === "string" && r.data.startsWith("wager_")) {
           contractWagerId = r.data;
         }
       }
-      if (typeof receipt === "string") {
+      if (typeof receipt === "string" && receipt.startsWith("wager_")) {
         contractWagerId = receipt;
       }
 
-      // If we couldn't extract the contractWagerId from receipt, construct a fallback
-      // We'll refetch user wagers to find it
+      // Attempt 2: discover via get_user_wagers + matching
       if (!contractWagerId) {
-        console.warn("[OddLock:PUBLISH] Could not extract contractWagerId from receipt, will refetch");
+        console.log("[OddLock:PUBLISH] Discovering wager ID via get_user_wagers…");
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY = 2000;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            if (attempt > 1) {
+              await new Promise((r) => setTimeout(r, RETRY_DELAY));
+            }
+            const userWagerIds = await readGetUserWagers(address);
+            console.log(`[OddLock:PUBLISH] Attempt ${attempt}: user has ${userWagerIds.length} wagers`);
+
+            // Check each wager to find the one matching our draft
+            for (const wid of userWagerIds.reverse()) { // newest first
+              try {
+                const w = await readGetWager(wid);
+                const match =
+                  w.creator?.toLowerCase() === address.toLowerCase() &&
+                  w.counterparty?.toLowerCase() === counterparty.toLowerCase() &&
+                  w.stakeAmountWei === String(stakeWei) &&
+                  w.question === (terms.question || "").slice(0, 500);
+
+                if (match) {
+                  contractWagerId = wid;
+                  console.log("[OddLock:PUBLISH] Matched wager:", {
+                    wagerId: wid,
+                    creator: w.creator,
+                    counterparty: w.counterparty,
+                    stake: w.stakeAmountWei,
+                    status: w.status,
+                  });
+                  break;
+                }
+              } catch {
+                // individual wager fetch failed, skip
+              }
+            }
+            if (contractWagerId) break;
+          } catch (err) {
+            console.warn(`[OddLock:PUBLISH] Discovery attempt ${attempt} failed:`, err);
+          }
+        }
       }
 
-      // Save the publish data to the draft
-      publishDraft(
-        draft.draftId,
-        contractWagerId || `pending_${hash}`,
-        hash,
-        CONTRACT_ADDRESS,
-        CHAIN_ID
-      );
+      if (!contractWagerId) {
+        console.error("[OddLock:PUBLISH] Could not discover wager ID after tx. The tx may still be processing.");
+        setPublishError(
+          "Transaction submitted but wager ID could not be discovered. " +
+          "The transaction may still be in consensus. Check the debug panel below or reload the page."
+        );
+        // Still save the tx hash so the user can track it
+        publishDraft(draft.draftId, "", hash, CONTRACT_ADDRESS, CHAIN_ID);
+        setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
+        setPublishStatus("error");
+        return;
+      }
+
+      // ── Save the real wager ID ─────────────────────────────────────
+      console.log("[OddLock:PUBLISH] Storing real contractWagerId:", contractWagerId);
+      publishDraft(draft.draftId, contractWagerId, hash, CONTRACT_ADDRESS, CHAIN_ID);
 
       // Refresh the local draft state
       setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
       setPublishStatus("done");
 
       // Refetch the on-chain wager data
-      if (contractWagerId) {
-        setTimeout(() => refetch(), 1000);
-      }
+      setTimeout(() => refetch(), 500);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Publish failed";
       console.error("[OddLock:PUBLISH_ERROR]", err);
@@ -383,6 +442,15 @@ export default function WagerDetailPage() {
         {/* Tx status */}
         <TxStatusDisplay txStatus={txStatus} txHash={txHash} txError={txError} />
 
+        {/* Debug panel */}
+        <DebugPanel
+          connectedWallet={address}
+          publishTxHash={draft?.publishTxHash}
+          contractWagerId={wager.wagerId}
+          wager={wager}
+          draft={draft}
+        />
+
         {/* Nav links */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
           <Link href={`/app/wagers/${wager.wagerId}/settle`}
@@ -409,7 +477,7 @@ export default function WagerDetailPage() {
     const contractReady = isContractConfigured();
     const publishBusy = publishStatus === "signing" || publishStatus === "pending";
     const hasValidCounterparty = !!draft.counterparty && isAddress(draft.counterparty);
-    const canPublish = contractReady && canWrite && hasValidCounterparty && !publishBusy;
+    const canPublish = contractReady && canWrite && hasValidCounterparty && !publishBusy && !isPublished;
 
     return (
       <div className="space-y-6 max-w-3xl mx-auto route-in">
@@ -575,14 +643,25 @@ export default function WagerDetailPage() {
           )}
         </div>
 
-        {/* Blocked actions notice */}
-        <div className="rounded p-4" style={{ border: "1px solid rgba(212,160,23,0.25)", background: "rgba(212,160,23,0.06)" }}>
-          <p className="font-nunito text-sm leading-relaxed" style={{ color: "var(--dim-label)" }}>
-            This is a local draft. Publish it to GenLayer first before the counterparty can accept,
-            fund, or trigger settlement. Contract actions are blocked until published.
-            {loadError && <><br /><span style={{ color: "var(--invalid-alert)" }}>Backend: {loadError}</span></>}
-          </p>
-        </div>
+        {/* Debug panel */}
+        <DebugPanel
+          connectedWallet={address}
+          publishTxHash={publishHash || draft.publishTxHash}
+          contractWagerId={draft.contractWagerId}
+          wager={wager}
+          draft={draft}
+        />
+
+        {/* Status notice */}
+        {!isPublished && (
+          <div className="rounded p-4" style={{ border: "1px solid rgba(212,160,23,0.25)", background: "rgba(212,160,23,0.06)" }}>
+            <p className="font-nunito text-sm leading-relaxed" style={{ color: "var(--dim-label)" }}>
+              This is a local draft. Publish it to GenLayer first before the counterparty can accept,
+              fund, or trigger settlement. Contract actions are blocked until published.
+              {loadError && !isDraftLocal && <><br /><span style={{ color: "var(--invalid-alert)" }}>Backend: {loadError}</span></>}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -640,5 +719,70 @@ function TxStatusDisplay({ txStatus, txHash, txError }: { txStatus: string; txHa
         </div>
       )}
     </>
+  );
+}
+
+function DebugPanel({
+  connectedWallet,
+  publishTxHash,
+  contractWagerId,
+  wager,
+  draft,
+}: {
+  connectedWallet?: string;
+  publishTxHash?: string;
+  contractWagerId?: string;
+  wager?: OnChainWager | null;
+  draft?: LocalDraft | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const rows: [string, string][] = [
+    ["Connected Wallet", connectedWallet || "—"],
+    ["Publish Tx Hash", publishTxHash || "—"],
+    ["Contract Wager ID", contractWagerId || "— (not yet discovered)"],
+    ["On-Chain Status", wager?.status || "— (not loaded)"],
+    ["Creator", wager?.creator || "—"],
+    ["Counterparty", wager?.counterparty || draft?.counterparty || "—"],
+    ["Creator Funded", wager ? (wager.creatorFunded ? "Yes" : "No") : "—"],
+    ["Counterparty Funded", wager ? (wager.counterpartyFunded ? "Yes" : "No") : "—"],
+    ["Stake (wei)", wager?.stakeAmountWei || "—"],
+    ["Total Escrowed (wei)", wager?.totalEscrowedWei || "—"],
+    ["Event Deadline", wager?.eventDeadline ? formatTimestamp(wager.eventDeadline) : "—"],
+    ["Settlement Opens At", wager?.settlementOpensAt ? formatTimestamp(wager.settlementOpensAt) : "—"],
+    ["Settlement Report ID", wager?.settlementReportId || "—"],
+    ["Dispute Report ID", wager?.disputeReportId || "—"],
+    ["Draft ID", draft?.draftId || "—"],
+    ["Draft Status", draft?.status || "—"],
+  ];
+
+  return (
+    <div className="rounded" style={{ border: "1px solid rgba(138,118,109,0.20)", background: "rgba(30,18,16,0.60)" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-2.5 font-exo text-xs tracking-widest"
+        style={{ color: "var(--dim-label)" }}
+      >
+        <span>DEBUG PANEL</span>
+        <span>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-3 space-y-1">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-4">
+              <span className="font-exo text-xs tracking-widest shrink-0" style={{ color: "rgba(138,118,109,0.55)" }}>
+                {label}
+              </span>
+              <span
+                className="font-azeret text-xs text-right truncate"
+                style={{ color: "rgba(203,194,192,0.60)", maxWidth: "60%" }}
+                title={value}
+              >
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
