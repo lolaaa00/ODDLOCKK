@@ -2,6 +2,8 @@
 
 **Two-party wagers locked by rules, settled by GenLayer.**
 
+**[Live Demo](https://oddlock.vercel.app/)**
+
 > **TESTNET/STUDIONET ONLY. NOT REAL-MONEY GAMBLING.**
 >
 > OddLock is a Studionet/testnet outcome settlement demo. It is not a real-money gambling product, sportsbook, casino, licensed wagering service, or financial product. Real-value deployment would require legal, compliance, responsible-gambling, age, identity, AML, and jurisdictional review.
