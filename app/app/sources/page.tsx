@@ -5,7 +5,7 @@ export default function SourcesPage() {
     <div className="max-w-3xl mx-auto space-y-8">
       <div className="flex items-center gap-3">
         <BookOpen className="h-5 w-5" style={{ color: "var(--dim-label)" }} />
-        <h1 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>
+        <h1 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>
           SOURCE REFERENCE
         </h1>
       </div>

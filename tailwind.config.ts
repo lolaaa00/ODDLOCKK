@@ -10,15 +10,14 @@ const config: Config = {
   theme: {
     extend: {
       fontSize: {
-        // Slightly larger base scale throughout
-        xs:   ["0.8125rem", { lineHeight: "1.4" }],   // 13px (was 12px)
-        sm:   ["0.9375rem", { lineHeight: "1.5" }],   // 15px (was 14px)
-        base: ["1.0625rem", { lineHeight: "1.65" }],  // 17px (was 16px)
-        lg:   ["1.1875rem", { lineHeight: "1.6" }],   // 19px (was 18px)
-        xl:   ["1.375rem",  { lineHeight: "1.4" }],   // 22px (was 20px)
-        "2xl":["1.625rem",  { lineHeight: "1.3" }],   // 26px (was 24px)
-        "3xl":["2rem",      { lineHeight: "1.2" }],   // 32px (was 30px)
-        "4xl":["2.5rem",    { lineHeight: "1.1" }],   // 40px (was 36px)
+        xs:   ["0.6875rem", { lineHeight: "1.4" }],
+        sm:   ["0.75rem",   { lineHeight: "1.5" }],
+        base: ["0.875rem",  { lineHeight: "1.6" }],
+        lg:   ["1rem",      { lineHeight: "1.55" }],
+        xl:   ["1.125rem",  { lineHeight: "1.4" }],
+        "2xl":["1.25rem",   { lineHeight: "1.3" }],
+        "3xl":["1.5rem",    { lineHeight: "1.2" }],
+        "4xl":["1.875rem",  { lineHeight: "1.1" }],
       },
       colors: {
         abyss:           "#2A100C",

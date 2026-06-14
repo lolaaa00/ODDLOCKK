@@ -29,7 +29,7 @@ export function ResponsibleUseLock() {
       <div className="glass-panel max-w-lg w-full rounded-lg p-8 border-[#E11D48]/40 shadow-[0_0_40px_rgba(225,29,72,0.2)]">
         <div className="flex items-center gap-3 mb-5">
           <ShieldAlert className="h-7 w-7 text-[#E11D48] shrink-0" />
-          <h2 className="font-staatliches text-3xl tracking-widest text-[#F0E6E2]">
+          <h2 className="font-staatliches text-base md:text-xl tracking-widest text-[#F0E6E2]">
             IMPORTANT NOTICE
           </h2>
         </div>
@@ -58,7 +58,7 @@ export function ResponsibleUseLock() {
 
         <button
           onClick={acknowledge}
-          className="btn-tribunal mt-6 w-full py-3 font-staatliches text-xl tracking-widest hover:opacity-90 transition-opacity"
+          className="btn-tribunal mt-6 w-full py-3 font-staatliches text-base md:text-xl tracking-widest hover:opacity-90 transition-opacity"
         >
           I UNDERSTAND, ENTER DEMO
         </button>

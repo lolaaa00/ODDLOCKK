@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { isContractConfigured } from "./config";
+import { isContractConfigured } from "@/lib/genlayerClient";
 import type { Address } from "@/types/wager";
 
 type WalletState = {

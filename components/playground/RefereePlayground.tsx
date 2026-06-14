@@ -82,7 +82,7 @@ export function RefereePlayground() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Beaker className="h-5 w-5" style={{ color: "var(--dim-label)" }} />
-        <h1 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>
+        <h1 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>
           REFEREE PLAYGROUND
         </h1>
       </div>

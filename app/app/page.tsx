@@ -1,6 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Scale, Beaker, ShieldCheck, Layers, Plus } from "lucide-react";
-import { isContractConfigured } from "@/lib/genlayer/config";
+import { isContractConfigured } from "@/lib/genlayerClient";
 
 export default function AppDashboard() {
   const contractReady = isContractConfigured();

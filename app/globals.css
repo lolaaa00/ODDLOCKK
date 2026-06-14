@@ -40,7 +40,7 @@
 * { box-sizing: border-box; }
 
 html {
-  font-size: 17px;
+  font-size: 16px;
 }
 
 html, body {
@@ -60,7 +60,7 @@ html, body {
 .capsule-card {
   background: var(--wine-3);
   border: 1px solid var(--mist-glass);
-  padding: 1.75rem;
+  padding: 1.25rem;
   transition: border-color 250ms ease, transform 250ms ease, box-shadow 250ms ease;
   position: relative;
   overflow: hidden;
@@ -365,9 +365,31 @@ html, body {
   border-left-color: var(--gold-2) !important;
 }
 
-/* ── Mobile typography scale ── */
+/* ── Mobile responsive ── */
 @media (max-width: 640px) {
-  .capsule-card { padding: 1.25rem; }
+  html { font-size: 14px; }
+  .capsule-card { padding: 0.875rem 0.75rem; }
+  .genlayer-note { max-width: 100%; padding: 1rem 0.875rem; }
+  .step-card { padding: 1rem 0.875rem; }
+  .feature-card { padding: 1.25rem 1rem; }
+  .feature-icon { width: 36px; height: 36px; margin-bottom: 0.75rem; }
+  .usecase-card { padding: 1rem; }
+  .btn-tribunal { font-size: 0.75rem; padding: 0.625rem 1.25rem; }
+  .btn-ghost { font-size: 0.75rem; padding: 0.625rem 1.25rem; }
+}
+
+/* ── How It Works steps: 2-col on tablet, 1-col on mobile ── */
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 860px) {
+  .steps-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+  .steps-grid { grid-template-columns: 1fr; }
+  .steps-grid > * { border-left: none !important; border-top: 1px solid rgba(240,230,226,0.1); }
+  .steps-grid > *:first-child { border-top: none; }
 }
 
 /* ── Landing nav links ── */

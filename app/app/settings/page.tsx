@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { Settings, Copy, Check } from "lucide-react";
-import { GENLAYER_STUDIONET, CONTRACT_ADDRESS, CURRENCY_MODE } from "@/lib/genlayer/config";
+import { CONTRACT_ADDRESS, CHAIN_ID, EXPLORER_URL } from "@/lib/genlayerClient";
+
+const GENLAYER_STUDIONET = {
+  name: "GenLayer Studionet",
+  chainId: CHAIN_ID,
+  rpcUrl: process.env.NEXT_PUBLIC_GENLAYER_RPC_URL ?? "https://studio.genlayer.com/api",
+  currency: "GEN",
+  explorerUrl: EXPLORER_URL,
+};
+const CURRENCY_MODE = process.env.NEXT_PUBLIC_CURRENCY_MODE ?? "INTERNAL_TEST_UNITS";
 
 export default function SettingsPage() {
   const [copied, setCopied] = useState<string | null>(null);

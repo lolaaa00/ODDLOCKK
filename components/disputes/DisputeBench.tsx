@@ -23,7 +23,7 @@ export function DisputeBench({
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Gavel className="h-5 w-5" style={{ color: "var(--dispute-signal)" }} />
-        <h2 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>
+        <h2 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>
           OBJECTION REVIEW
         </h2>
         {disputeWindowEnds && disputeWindowOpen && (
@@ -50,7 +50,7 @@ export function DisputeBench({
             Ground: <span className="font-azeret">{existingDispute.ground}</span>
           </div>
           <div className="font-exo text-xs tracking-widest mb-1" style={{ color: "var(--dim-label)" }}>TRIBUNAL VERDICT</div>
-          <div className="font-staatliches text-3xl tracking-widest mb-2" style={{ color: "var(--ink-text)" }}>
+          <div className="font-staatliches text-base md:text-xl tracking-widest mb-2" style={{ color: "var(--ink-text)" }}>
             {existingDispute.outcome}
           </div>
           <p className="font-nunito text-base" style={{ color: "var(--dim-label)" }}>{existingDispute.summary}</p>

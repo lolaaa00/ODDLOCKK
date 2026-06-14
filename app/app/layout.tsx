@@ -7,7 +7,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <LockedTicketShell>
       <ResponsibleUseLock />
       <SealedLedgerRail />
-      <div className="mx-auto max-w-7xl px-4 py-8">{children}</div>
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">{children}</div>
     </LockedTicketShell>
   );
 }

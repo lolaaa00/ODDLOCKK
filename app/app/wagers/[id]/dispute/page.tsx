@@ -1,20 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { useGenLayer } from "@/lib/genlayer/useGenLayer";
-import {
-  readGetWager,
-  readGetDispute,
-  writeDisputeSettlement,
-  waitForTx,
-  type OnChainWager,
-  type OnChainDispute,
-} from "@/lib/genlayer/contract";
+import { useWager, useDispute } from "@/hooks/useOddLockReads";
+import { useOddLockWrites } from "@/hooks/useOddLockWrites";
+import { useOddLockPermissions } from "@/hooks/useOddLockPermissions";
+import { isContractConfigured } from "@/lib/genlayerClient";
 import { DisputeBench } from "@/components/disputes/DisputeBench";
 import type { DisputeReport } from "@/types/wager";
+import type { OnChainDispute } from "@/lib/oddlockContract";
 
 function toDisputeReport(d: OnChainDispute): DisputeReport {
   return {
@@ -33,51 +28,26 @@ function toDisputeReport(d: OnChainDispute): DisputeReport {
 
 export default function DisputePage() {
   const { id } = useParams<{ id: string }>();
-  const { address, provider, canWrite, contractReady } = useGenLayer();
+  const contractReady = isContractConfigured();
 
-  const [wager, setWager] = useState<OnChainWager | null>(null);
-  const [dispute, setDispute] = useState<OnChainDispute | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [txError, setTxError] = useState("");
+  // Contract reads
+  const { data: wager, loading, refetch: refetchWager } = useWager(id);
+  const { data: dispute } = useDispute(wager?.disputeReportId);
 
-  const load = useCallback(async () => {
-    if (!contractReady) return;
-    setLoading(true);
-    try {
-      const w = await readGetWager(id);
-      setWager(w);
-      if (w.disputeReportId) {
-        const d = await readGetDispute(w.disputeReportId);
-        setDispute(d);
-      }
-    } catch {
-      // may be a local draft
-    } finally {
-      setLoading(false);
-    }
-  }, [id, contractReady]);
+  // Writes
+  const { txError, disputeSettlement, canWrite } = useOddLockWrites();
 
-  useEffect(() => { load(); }, [load]);
-
-  const disputeWindowOpen = (() => {
-    if (!wager || wager.status !== "RESOLVED") return false;
-    const hours = Number((wager.terms as Record<string, unknown>).disputeWindowHours ?? 24);
-    const windowEnds = wager.resolvedAt + hours * 3600 * 1000;
-    return Date.now() < windowEnds;
-  })();
+  // Permissions
+  const perms = useOddLockPermissions(wager);
 
   async function handleDispute(ground: string, explanation: string) {
-    if (!canWrite || !provider || !address || !wager) return;
-    setTxError("");
-    try {
-      const packet = JSON.stringify({ ground, explanation, wagerId: wager.wagerId });
-      const hash = await writeDisputeSettlement(provider, address, wager.wagerId, packet);
-      await waitForTx(hash);
-      await load();
-    } catch (err) {
-      setTxError(err instanceof Error ? err.message : "Transaction failed");
-      throw err;
-    }
+    if (!wager) return;
+    const packet = JSON.stringify({
+      ground,
+      explanation,
+      wagerId: wager.wagerId,
+    });
+    disputeSettlement(wager.wagerId, packet, refetchWager);
   }
 
   return (
@@ -87,7 +57,7 @@ export default function DisputePage() {
       </Link>
 
       {!contractReady && (
-        <div className="rounded p-4" style={{ border: "1px solid rgba(226,112,112,0.35)", background: "rgba(226,112,112,0.35)" }}>
+        <div className="rounded p-4" style={{ border: "1px solid rgba(226,112,112,0.25)", background: "rgba(226,112,112,0.06)" }}>
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" style={{ color: "var(--invalid-alert)" }} />
             <span className="font-exo text-xs tracking-widest" style={{ color: "var(--invalid-alert)" }}>CONTRACT NOT CONFIGURED</span>
@@ -103,14 +73,24 @@ export default function DisputePage() {
       )}
 
       {txError && (
-        <div className="rounded px-4 py-3" style={{ border: "1px solid rgba(226,112,112,0.35)", background: "rgba(226,112,112,0.35)" }}>
-          <span className="font-nunito text-base" style={{ color: "var(--invalid-alert)" }}>{txError}</span>
+        <div className="rounded px-4 py-3" style={{ border: "1px solid rgba(226,112,112,0.25)", background: "rgba(226,112,112,0.06)" }}>
+          <span className="font-nunito text-sm" style={{ color: "var(--invalid-alert)" }}>{txError}</span>
+        </div>
+      )}
+
+      {!perms.canDispute && wager && !loading && (
+        <div className="rounded p-4" style={{ border: "1px solid var(--glass-line)", background: "var(--soft-panel)" }}>
+          <p className="font-nunito text-sm" style={{ color: "var(--dim-label)" }}>
+            {wager.status !== "RESOLVED"
+              ? "Disputes can only be filed when a capsule is in RESOLVED status."
+              : "The dispute window has closed or you are not a party to this capsule."}
+          </p>
         </div>
       )}
 
       <DisputeBench
         wagerId={id}
-        disputeWindowOpen={canWrite && disputeWindowOpen}
+        disputeWindowOpen={canWrite && perms.canDispute}
         existingDispute={dispute ? toDisputeReport(dispute) : null}
         onDispute={handleDispute}
       />

@@ -49,7 +49,7 @@ export function ObjectionSlip({ onSubmit }: Props) {
     <div className="rounded p-5 space-y-4" style={{ border: "1px solid rgba(200,155,60,ALPHA)", background: "rgba(200,155,60,ALPHA)" }}>
       <div className="flex items-center gap-2">
         <FileWarning className="h-5 w-5" style={{ color: "var(--dispute-signal)" }} />
-        <h3 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--dispute-signal)" }}>
+        <h3 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--dispute-signal)" }}>
           FILE OBJECTION
         </h3>
       </div>

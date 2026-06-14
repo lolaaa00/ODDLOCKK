@@ -11,11 +11,12 @@ import type { LocalDraft } from "@/types/wager";
 
 export default function TermsPage() {
   const { id } = useParams<{ id: string }>();
-  const draft: LocalDraft | null =
-    typeof window !== "undefined"
-      ? (getDrafts().find((d) => d.draftId === id) ?? null)
-      : null;
+  const [draft, setDraft] = useState<LocalDraft | null>(null);
   const [termsHash, setTermsHash] = useState("");
+
+  useEffect(() => {
+    setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
+  }, [id]);
 
   useEffect(() => {
     if (!draft?.terms) return;
@@ -37,7 +38,7 @@ export default function TermsPage() {
 
       <div className="flex items-center gap-3">
         <Lock className="h-5 w-5 text-[#D4A017]" />
-        <h1 className="font-staatliches text-3xl tracking-wide text-[#F0E6E2]">LOCKED TERMS</h1>
+        <h1 className="font-staatliches text-base md:text-xl tracking-wide text-[#F0E6E2]">LOCKED TERMS</h1>
       </div>
 
       <div className="parchment-surface rounded-sm p-5">

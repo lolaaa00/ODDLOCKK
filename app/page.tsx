@@ -9,7 +9,7 @@ export default function LandingPage() {
       <nav style={{
         position: "sticky", top: 0, zIndex: 100,
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "1.125rem 2.75rem",
+        padding: "0.875rem 1.25rem",
         background: "rgba(20,6,4,0.88)",
         backdropFilter: "blur(22px)",
         WebkitBackdropFilter: "blur(22px)",
@@ -36,7 +36,7 @@ export default function LandingPage() {
               clipPath: "polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)",
             }} />
           </div>
-          <span style={{ fontFamily: "var(--font-staatliches), sans-serif", fontSize: "1.75rem", letterSpacing: "0.1em", color: "#F0E6E2" }}>
+          <span style={{ fontFamily: "var(--font-staatliches), sans-serif", fontSize: "1.25rem", letterSpacing: "0.1em", color: "#F0E6E2" }}>
             OddLock
           </span>
         </Link>
@@ -50,9 +50,9 @@ export default function LandingPage() {
         </ul>
 
         <Link href="/app" className="btn-tribunal" style={{
-          padding: "0.625rem 1.5rem",
+          padding: "0.5rem 1.25rem",
           fontFamily: "var(--font-exo-2), sans-serif",
-          fontSize: "1.125rem", fontWeight: 700, letterSpacing: "0.08em",
+          fontSize: "0.875rem", fontWeight: 700, letterSpacing: "0.08em",
           textTransform: "uppercase", textDecoration: "none",
           display: "inline-block", borderRadius: 4,
         }}>
@@ -63,11 +63,11 @@ export default function LandingPage() {
       {/* HERO */}
       <section style={{
         position: "relative", zIndex: 2,
-        minHeight: "100vh",
+        minHeight: "85vh",
         display: "flex", flexDirection: "column",
         justifyContent: "center", alignItems: "center",
         textAlign: "center",
-        padding: "9rem 2rem 5rem",
+        padding: "4rem 1.25rem 2.5rem",
         overflow: "hidden",
       }}>
         {/* Halo */}
@@ -82,12 +82,12 @@ export default function LandingPage() {
         {/* Badge */}
         <div style={{
           fontFamily: "var(--font-exo-2), sans-serif",
-          fontSize: "0.8125rem", fontWeight: 600, letterSpacing: "0.16em",
+          fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.14em",
           textTransform: "uppercase", color: "#EEC044",
           padding: "0.5rem 1.25rem",
           border: "1px solid rgba(212,160,23,0.3)",
           borderRadius: 3, background: "rgba(212,160,23,0.08)",
-          marginBottom: "2.5rem",
+          marginBottom: "1.75rem",
           display: "inline-flex", alignItems: "center", gap: "0.625rem",
           position: "relative", zIndex: 1,
         }}>
@@ -102,10 +102,10 @@ export default function LandingPage() {
         {/* Headline */}
         <h1 style={{
           fontFamily: "var(--font-staatliches), sans-serif",
-          fontSize: "clamp(4rem, 13vw, 9.5rem)",
+          fontSize: "clamp(1.75rem, 6vw, 3.5rem)",
           letterSpacing: "0.06em", textTransform: "uppercase",
-          lineHeight: 0.88, marginBottom: "1.75rem",
-          maxWidth: 1000, position: "relative", zIndex: 1,
+          lineHeight: 0.92, marginBottom: "1.5rem",
+          maxWidth: 800, position: "relative", zIndex: 1,
           color: "#F0E6E2",
         }}>
           <span style={{ display: "block" }}>Lock the</span>
@@ -130,9 +130,9 @@ export default function LandingPage() {
 
         <p style={{
           fontFamily: "var(--font-nunito-sans), sans-serif",
-          fontSize: "1.1875rem", lineHeight: 1.65,
+          fontSize: "0.875rem", lineHeight: 1.6,
           color: "#DDD0CC",
-          maxWidth: 580, marginBottom: "2.75rem",
+          maxWidth: 520, marginBottom: "2rem",
           position: "relative", zIndex: 1,
         }}>
           Two parties. One sealed wager. GenLayer intelligent consensus reviews your locked
@@ -141,18 +141,18 @@ export default function LandingPage() {
 
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", justifyContent: "center", position: "relative", zIndex: 1 }}>
           <Link href="/app/create" className="btn-tribunal" style={{
-            padding: "0.9375rem 2rem",
+            padding: "0.75rem 1.5rem",
             fontFamily: "var(--font-exo-2), sans-serif",
-            fontSize: "1.125rem", fontWeight: 700, letterSpacing: "0.06em",
+            fontSize: "0.8125rem", fontWeight: 700, letterSpacing: "0.06em",
             textTransform: "uppercase", textDecoration: "none",
             display: "inline-flex", alignItems: "center", gap: "0.5rem",
           }}>
             Create Wager →
           </Link>
           <Link href="#how" className="btn-ghost" style={{
-            padding: "0.9375rem 2rem",
+            padding: "0.75rem 1.5rem",
             fontFamily: "var(--font-exo-2), sans-serif",
-            fontSize: "1.125rem", fontWeight: 600, letterSpacing: "0.06em",
+            fontSize: "0.8125rem", fontWeight: 600, letterSpacing: "0.06em",
             textTransform: "uppercase", textDecoration: "none",
           }}>
             See How It Works
@@ -170,7 +170,7 @@ export default function LandingPage() {
       }}>
         <p style={{
           fontFamily: "var(--font-azeret-mono), monospace",
-          fontSize: "1.125rem", color: "#EEC044",
+          fontSize: "0.8125rem", color: "#EEC044",
           lineHeight: 1.55, maxWidth: 820, margin: "0 auto",
         }}>
           ⚠ OddLock is a Studionet/testnet outcome settlement demo. Not a real-money gambling product,
@@ -181,12 +181,12 @@ export default function LandingPage() {
       {/* HOW IT WORKS */}
       <section id="how" style={{
         position: "relative", zIndex: 2,
-        maxWidth: 1180, margin: "0 auto", padding: "7rem 2rem",
+        maxWidth: 1080, margin: "0 auto", padding: "3rem 1.25rem",
         width: "100%",
       }}>
         <div style={{
           fontFamily: "var(--font-exo-2), sans-serif",
-          fontSize: "1.125rem", fontWeight: 700,
+          fontSize: "0.75rem", fontWeight: 700,
           letterSpacing: "0.22em", textTransform: "uppercase",
           color: "#D4152A",
           marginBottom: "0.875rem",
@@ -198,7 +198,7 @@ export default function LandingPage() {
 
         <h2 style={{
           fontFamily: "var(--font-staatliches), sans-serif",
-          fontSize: "clamp(2.75rem, 6vw, 5rem)",
+          fontSize: "clamp(1.25rem, 4vw, 2rem)",
           letterSpacing: "0.05em", textTransform: "uppercase",
           color: "#F0E6E2", lineHeight: 0.95, marginBottom: "1rem",
         }}>
@@ -206,16 +206,14 @@ export default function LandingPage() {
         </h2>
         <p style={{
           fontFamily: "var(--font-nunito-sans), sans-serif",
-          color: "#DDD0CC", fontSize: "1.125rem", lineHeight: 1.65,
+          color: "#DDD0CC", fontSize: "0.875rem", lineHeight: 1.65,
           maxWidth: 540, marginBottom: "3.5rem",
         }}>
           No ambiguity. No late-rule changes. Terms sealed before the event. GenLayer decides after.
         </p>
 
         {/* Steps grid */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+        <div className="steps-grid" style={{
           border: "1px solid rgba(240,230,226,0.1)",
           borderRadius: 6, overflow: "hidden",
           background: "rgba(240,230,226,0.06)",
@@ -227,26 +225,26 @@ export default function LandingPage() {
             { num: "04", title: "Verdict Sealed",   desc: "Winner claims stakes or a refund is issued. Either party may file an objection within the dispute window." },
           ].map(({ num, title, desc }, i) => (
             <div key={num} style={{
-              background: "#3D1A16", padding: "2.25rem 1.75rem",
+              background: "#3D1A16", padding: "1.5rem 1.25rem",
               borderLeft: i > 0 ? "1px solid rgba(240,230,226,0.1)" : "none",
             }}
             className="step-card"
             >
               <div style={{
                 fontFamily: "var(--font-changa-one), sans-serif",
-                fontSize: "3.25rem", lineHeight: 1, marginBottom: "1.25rem",
+                fontSize: "1.5rem", lineHeight: 1, marginBottom: "0.75rem",
                 background: "linear-gradient(135deg, #B01020 0%, #D4A017 100%)",
                 WebkitBackgroundClip: "text", backgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}>{num}</div>
               <div style={{
                 fontFamily: "var(--font-staatliches), sans-serif",
-                fontSize: "1.3125rem", letterSpacing: "0.06em",
+                fontSize: "1rem", letterSpacing: "0.06em",
                 textTransform: "uppercase", color: "#F0E6E2", marginBottom: "0.625rem",
               }}>{title}</div>
               <p style={{
                 fontFamily: "var(--font-nunito-sans), sans-serif",
-                fontSize: "0.9375rem", color: "#DDD0CC", lineHeight: 1.55,
+                fontSize: "0.8125rem", color: "#DDD0CC", lineHeight: 1.55,
               }}>{desc}</p>
             </div>
           ))}
@@ -264,7 +262,7 @@ export default function LandingPage() {
           </div>
           <p style={{
             fontFamily: "var(--font-nunito-sans), sans-serif",
-            fontSize: "1.125rem", color: "#DDD0CC", lineHeight: 1.6,
+            fontSize: "0.875rem", color: "#DDD0CC", lineHeight: 1.6,
           }}>
             Deterministic smart contracts can lock terms and stakes, but they cannot interpret source
             conflicts, late result updates, cancellation rules, postponement clauses, ambiguous wording,
@@ -282,7 +280,7 @@ export default function LandingPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
           <ShieldCheck style={{ width: 15, height: 15, color: "#C8B8B0" }} />
           <span style={{
-            fontFamily: "var(--font-exo-2), sans-serif", fontSize: "1.125rem",
+            fontFamily: "var(--font-exo-2), sans-serif", fontSize: "0.75rem",
             letterSpacing: "0.12em", textTransform: "uppercase", color: "#A8917F",
           }}>Responsible Use</span>
         </div>

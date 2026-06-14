@@ -56,17 +56,20 @@ export function getDrafts(): LocalDraft[] {
 export function saveDraft(
   draftId: string,
   title: string,
-  terms: Partial<WagerTerms>
+  terms: Partial<WagerTerms>,
+  extra?: Partial<Pick<LocalDraft, "counterparty" | "stakeAmount" | "status">>
 ): LocalDraft {
   const drafts = getDrafts();
   const now = Date.now();
   const existing = drafts.findIndex((d) => d.draftId === draftId);
   const draft: LocalDraft = {
+    ...(existing >= 0 ? drafts[existing] : {}),
     draftId,
     title,
     terms,
     createdAt: existing >= 0 ? drafts[existing].createdAt : now,
     updatedAt: now,
+    ...extra,
   };
   if (existing >= 0) {
     drafts[existing] = draft;
@@ -80,6 +83,40 @@ export function saveDraft(
 export function deleteDraft(draftId: string): void {
   const drafts = getDrafts().filter((d) => d.draftId !== draftId);
   safeWrite(DRAFTS_KEY, drafts);
+}
+
+/**
+ * Mark a local draft as published after a successful create_wager() call.
+ * Stores the contractWagerId so the app can load the on-chain version.
+ */
+export function publishDraft(
+  draftId: string,
+  contractWagerId: string,
+  txHash: string,
+  contractAddress: string,
+  chainId: number
+): void {
+  const drafts = getDrafts();
+  const idx = drafts.findIndex((d) => d.draftId === draftId);
+  if (idx < 0) return;
+  drafts[idx] = {
+    ...drafts[idx],
+    contractWagerId,
+    publishTxHash: txHash,
+    contractAddress,
+    chainId,
+    publishedAt: Date.now(),
+    updatedAt: Date.now(),
+    status: "PUBLISHED",
+  };
+  safeWrite(DRAFTS_KEY, drafts);
+}
+
+/**
+ * Find a draft by its contractWagerId (for reverse lookup).
+ */
+export function getDraftByContractId(contractWagerId: string): LocalDraft | undefined {
+  return getDrafts().find((d) => d.contractWagerId === contractWagerId);
 }
 
 export function getSettings(): ResponsibleUseSettings {

@@ -8,9 +8,8 @@ import { cn } from "@/lib/utils";
 import { sha256Hex, generateId } from "@/lib/utils";
 import { checkBlockedContent, isVague } from "@/lib/validation/wager";
 import { saveDraft } from "@/lib/storage/drafts";
-import { useGenLayer } from "@/lib/genlayer/useGenLayer";
-import { writeCreateWager, waitForTx } from "@/lib/genlayer/contract";
-import type { WagerTerms, Address } from "@/types/wager";
+import { validateTerms } from "@/utils/oddlockArgs";
+import type { WagerTerms } from "@/types/wager";
 
 const STEP_LABELS = ["EVENT", "SIDES", "SOURCES", "RULES", "TERMS", "CONFIRM"];
 
@@ -31,7 +30,7 @@ const TZ_OPTIONS = [
   "Europe/London", "Europe/Paris", "Asia/Tokyo", "Asia/Singapore", "Australia/Sydney",
 ];
 
-interface FormState {
+export interface FormState {
   title: string; category: string; question: string; counterparty: string;
   stakeAmount: string; creatorSide: string; counterpartySide: string;
   eventDeadlineDate: string; eventDeadlineTime: string; timezone: string;
@@ -55,18 +54,23 @@ const EMPTY: FormState = {
   disputeWindowHours: "24",
 };
 
-export function WagerCreateWizard() {
+export interface WagerWizardProps {
+  /** Pre-fill fields when editing an existing draft */
+  initialValues?: Partial<FormState>;
+  /** The draftId to overwrite (edit mode) — if absent, creates a new draft */
+  editDraftId?: string;
+}
+
+export function WagerCreateWizard({ initialValues, editDraftId }: WagerWizardProps = {}) {
+  const isEditMode = !!editDraftId;
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const [form, setForm] = useState<FormState>({ ...EMPTY, ...initialValues });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [txStatus, setTxStatus] = useState<"idle" | "signing" | "pending" | "done" | "error">("idle");
-  const [txHash, setTxHash] = useState("");
   const [txError, setTxError] = useState("");
   const router = useRouter();
-  const { address, provider, canWrite } = useGenLayer();
 
-  // suppress unused import warning from sha256Hex, used in step confirm
+  // suppress unused import warning from sha256Hex
   void sha256Hex;
 
   function set(key: keyof FormState, value: string) {
@@ -132,36 +136,27 @@ export function WagerCreateWizard() {
       disputeWindowHours: Number(form.disputeWindowHours),
     };
 
-    const draftId = generateId();
-    saveDraft(draftId, form.title, terms);
-
-    if (canWrite && provider && address) {
-      try {
-        setTxStatus("signing");
-        const stakeWei = BigInt(Math.floor(Number(form.stakeAmount) * 1e18));
-        const { hash } = await writeCreateWager(provider, address, JSON.stringify(terms), form.counterparty as Address, stakeWei);
-        setTxHash(hash);
-        setTxStatus("pending");
-        await waitForTx(hash);
-        setTxStatus("done");
-        setSubmitting(false);
-        router.push(`/app/wagers?tx=${hash}`);
-        return;
-      } catch (err) {
-        setTxError(err instanceof Error ? err.message : "Transaction failed");
-        setTxStatus("error");
-        setSubmitting(false);
-        router.push(`/app/wagers?draft=${draftId}`);
-        return;
-      }
+    // Validate terms before saving
+    const termsValidation = validateTerms(terms);
+    if (termsValidation) {
+      setTxError(termsValidation);
+      setSubmitting(false);
+      return;
     }
 
+    // Save draft locally — publishing happens on the draft detail page
+    const draftId = editDraftId ?? generateId();
+    saveDraft(draftId, form.title, terms, {
+      counterparty: form.counterparty,
+      stakeAmount: form.stakeAmount,
+      status: "DRAFT_LOCAL",
+    });
+
     setSubmitting(false);
-    router.push(`/app/wagers?draft=${draftId}`);
+    router.push(`/app/wagers/${draftId}`);
   }
 
   const vague = step === 0 && form.question ? isVague(form.question) : false;
-  const explorerUrl = process.env.NEXT_PUBLIC_GENLAYER_EXPLORER_URL;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -201,35 +196,14 @@ export function WagerCreateWizard() {
           {step === 2 && <Step2 form={form} set={set} errors={errors} />}
           {step === 3 && <Step3 form={form} set={set} errors={errors} />}
           {step === 4 && <Step4 form={form} set={set} errors={errors} />}
-          {step === 5 && <Step5 form={form} address={address ?? ""} />}
+          {step === 5 && <Step5 form={form} />}
         </motion.div>
       </AnimatePresence>
 
-      {/* Tx status */}
-      {txStatus === "signing" && (
-        <div className="mt-4 flex items-center gap-2 rounded px-4 py-3" style={{ border: "1px solid rgba(240,230,226,0.18)", background: "rgba(200,155,60,0.06)" }}>
-          <div className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--dispute-signal)" }} />
-          <span className="font-azeret text-sm" style={{ color: "var(--dispute-signal)" }}>Waiting for wallet signature…</span>
-        </div>
-      )}
-      {txStatus === "pending" && (
-        <div className="mt-4 space-y-1 rounded px-4 py-3" style={{ border: "1px solid rgba(240,230,226,0.18)", background: "rgba(200,155,60,0.06)" }}>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--bio-glow)" }} />
-            <span className="font-azeret text-sm" style={{ color: "var(--dim-label)" }}>Submitted, awaiting GenLayer consensus…</span>
-          </div>
-          {txHash && explorerUrl && (
-            <a href={`${explorerUrl}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-              className="font-azeret text-sm underline break-all" style={{ color: "rgba(200,155,60,0.20)" }}>
-              {txHash}
-            </a>
-          )}
-        </div>
-      )}
-      {txStatus === "error" && (
+      {/* Validation error */}
+      {txError && (
         <div className="mt-4 rounded px-4 py-3" style={{ border: "1px solid rgba(226,112,112,0.30)", background: "rgba(226,112,112,0.06)" }}>
           <span className="font-nunito text-sm" style={{ color: "var(--invalid-alert)" }}>{txError}</span>
-          <p className="font-nunito text-sm mt-1" style={{ color: "var(--dim-label)" }}>Draft saved locally. You can retry after fixing the issue.</p>
         </div>
       )}
 
@@ -260,10 +234,7 @@ export function WagerCreateWizard() {
             disabled={submitting}
             className="btn-tribunal flex items-center gap-2 rounded px-8 py-2.5 font-staatliches text-base tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {submitting
-              ? txStatus === "signing" ? "AWAITING SIGNATURE…"
-              : txStatus === "pending" ? "CONFIRMING…" : "LOCKING…"
-              : canWrite ? "SEAL CAPSULE ON-CHAIN" : "SAVE DRAFT"}
+            {submitting ? "SAVING…" : isEditMode ? "UPDATE DRAFT" : "SAVE CAPSULE DRAFT"}
           </button>
         )}
       </div>
@@ -297,7 +268,7 @@ const inputCls = "w-full rounded px-3 py-2.5 font-nunito text-base focus:outline
 function Step0({ form, set, errors, vague }: { form: FormState; set: (k: keyof FormState, v: string) => void; errors: Partial<Record<keyof FormState, string>>; vague: boolean }) {
   return (
     <div className="space-y-4">
-      <h2 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>DEFINE THE EVENT</h2>
+      <h2 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>DEFINE THE EVENT</h2>
       <Field label="CAPSULE TITLE *" error={errors.title}>
         <input className={inputCls} style={inputStyle} placeholder="e.g. Premier League match result" value={form.title} onChange={(e) => set("title", e.target.value)} />
       </Field>
@@ -348,7 +319,7 @@ function Step0({ form, set, errors, vague }: { form: FormState; set: (k: keyof F
 function Step1({ form, set, errors }: { form: FormState; set: (k: keyof FormState, v: string) => void; errors: Partial<Record<keyof FormState, string>> }) {
   return (
     <div className="space-y-4">
-      <h2 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>SEAL BOTH POSITIONS</h2>
+      <h2 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>SEAL BOTH POSITIONS</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-3 rounded p-4" style={{ border: "1px solid rgba(240,230,226,0.18)", background: "rgba(200,155,60,0.06)" }}>
           <div className="font-exo text-xs tracking-widest" style={{ color: "var(--dim-label)" }}>POSITION A (YOURS)</div>
@@ -376,7 +347,7 @@ function Step1({ form, set, errors }: { form: FormState; set: (k: keyof FormStat
 function Step2({ form, set, errors }: { form: FormState; set: (k: keyof FormState, v: string) => void; errors: Partial<Record<keyof FormState, string>> }) {
   return (
     <div className="space-y-4">
-      <h2 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>BUILD EVIDENCE CHAIN</h2>
+      <h2 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>BUILD EVIDENCE CHAIN</h2>
       <p className="font-nunito text-base" style={{ color: "var(--dim-label)" }}>GenLayer will check these sources when settling. Define them precisely before locking.</p>
       <Field label="PRIMARY SOURCE URL *" error={errors.primarySource}>
         <input className={inputCls} style={inputStyle} placeholder="https://official-source.com/results/…" value={form.primarySource} onChange={(e) => set("primarySource", e.target.value)} />
@@ -397,7 +368,7 @@ function Step2({ form, set, errors }: { form: FormState; set: (k: keyof FormStat
 function Step3({ form, set, errors }: { form: FormState; set: (k: keyof FormState, v: string) => void; errors: Partial<Record<keyof FormState, string>> }) {
   return (
     <div className="space-y-4">
-      <h2 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>LOCK THE RULES</h2>
+      <h2 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>LOCK THE RULES</h2>
       <Field label="CONFLICT RULE *" error={errors.conflictRule}>
         <textarea className={cn(inputCls, "resize-none")} style={inputStyle} rows={2} value={form.conflictRule} onChange={(e) => set("conflictRule", e.target.value)} />
       </Field>
@@ -417,7 +388,7 @@ function Step3({ form, set, errors }: { form: FormState; set: (k: keyof FormStat
 function Step4({ form, set, errors }: { form: FormState; set: (k: keyof FormState, v: string) => void; errors: Partial<Record<keyof FormState, string>> }) {
   return (
     <div className="space-y-4">
-      <h2 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--ink-text)" }}>OBJECTION TERMS</h2>
+      <h2 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--ink-text)" }}>OBJECTION TERMS</h2>
       <Field label="OBJECTION WINDOW (hours after settlement)" error={errors.disputeWindowHours}>
         <input type="number" className={inputCls} style={inputStyle} min="1" max="168" value={form.disputeWindowHours} onChange={(e) => set("disputeWindowHours", e.target.value)} />
       </Field>
@@ -434,10 +405,10 @@ function Step4({ form, set, errors }: { form: FormState; set: (k: keyof FormStat
   );
 }
 
-function Step5({ form }: { form: FormState; address: string }) {
+function Step5({ form }: { form: FormState }) {
   return (
     <div className="space-y-4">
-      <h2 className="font-staatliches text-3xl tracking-wide" style={{ color: "var(--dim-label)" }}>CONFIRM & SEAL</h2>
+      <h2 className="font-staatliches text-base md:text-xl tracking-wide" style={{ color: "var(--dim-label)" }}>CONFIRM & SEAL</h2>
       <div className="space-y-3 rounded p-5" style={{ border: "1px solid var(--glass-line)", background: "var(--soft-panel)" }}>
         <Row label="TITLE"              value={form.title} />
         <Row label="QUESTION"          value={form.question} />
@@ -452,8 +423,8 @@ function Step5({ form }: { form: FormState; address: string }) {
       </div>
       <div className="rounded p-4" style={{ border: "1px solid rgba(240,230,226,0.18)", background: "rgba(200,155,60,0.06)" }}>
         <p className="font-nunito text-sm leading-relaxed" style={{ color: "var(--dim-label)" }}>
-          Sealing this capsule saves it locally. To submit to GenLayer Studionet, ensure the
-          contract is deployed and your wallet is connected. All stakes are testnet units with no real monetary value.
+          This saves your capsule as a local draft. You can review it and then publish it to
+          GenLayer Studionet from the draft detail page. All stakes are internal test units with no real monetary value.
         </p>
       </div>
     </div>

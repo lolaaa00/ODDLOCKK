@@ -22,7 +22,7 @@ export function StakeTestUnitBox({ amount, currencyMode, label = "STAKE" }: Prop
         </span>
       </div>
       <div className="flex items-baseline gap-2">
-        <span className="font-changa text-3xl text-[#D4A017]">{displayAmount}</span>
+        <span className="font-changa text-base md:text-xl text-[#D4A017]">{displayAmount}</span>
         <span className="font-exo text-sm tracking-wider text-[rgba(240,230,226,0.45)]">
           {unitLabel}
         </span>

@@ -137,10 +137,28 @@ export type DisputeReport = {
   createdAt: number;
 };
 
+export type DraftStatus = "DRAFT_LOCAL" | "PUBLISHING" | "PUBLISHED";
+
 export type LocalDraft = {
   draftId: string;
   title: string;
   terms: Partial<WagerTerms>;
   createdAt: number;
   updatedAt: number;
+  /** Set after successful create_wager() call */
+  contractWagerId?: string;
+  /** Transaction hash from the publish call */
+  publishTxHash?: string;
+  /** Contract address it was published to */
+  contractAddress?: string;
+  /** Chain ID it was published on */
+  chainId?: number;
+  /** When it was published */
+  publishedAt?: number;
+  /** Counterparty address set during creation */
+  counterparty?: string;
+  /** Stake amount in test units (pre-wei) */
+  stakeAmount?: string;
+  /** Lifecycle status */
+  status?: DraftStatus;
 };
