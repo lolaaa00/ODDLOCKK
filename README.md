@@ -20,6 +20,17 @@ QUESTION → SIDE SEALS → SOURCE CHAIN → LOCKED TICKET → GENLAYER REFEREE 
 
 OddLock does **not** ask GenLayer to create bets. It asks GenLayer to referee locked terms using trusted public evidence.
 
+### Real Source-Evidence Path
+
+When settlement is requested, the contract:
+
+1. Accepts user-submitted evidence items (per-source findings tied to locked URLs)
+2. Fetches the locked PRIMARY and FALLBACK source URLs via `gl.nondet.get_webpage()` (GenLayer nondeterministic web API)
+3. Passes both the user-submitted and contract-fetched source content to the GenLayer LLM referee
+4. The referee cross-checks user claims against fetched content, applies locked rules, and returns a structured verdict
+
+This ensures settlement is grounded in actual source data, not just a generic "settle this" request. The same source-fetching applies during dispute review.
+
 ---
 
 ## Why GenLayer
@@ -71,17 +82,7 @@ cp .env.local.example .env.local   # edit NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS
 npm run dev
 ```
 
-### Environment variables
-
-```env
-NEXT_PUBLIC_APP_NAME=OddLock
-NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS=   # deploy OddLockReferee and add address here
-NEXT_PUBLIC_GENLAYER_CHAIN_ID=61999
-NEXT_PUBLIC_GENLAYER_RPC_URL=https://studio.genlayer.com/api
-NEXT_PUBLIC_GENLAYER_EXPLORER_URL=https://explorer-studio.genlayer.com
-NEXT_PUBLIC_CURRENCY_MODE=INTERNAL_TEST_UNITS
-NEXT_PUBLIC_USE_LOCAL_DRAFTS=true
-```
+A working `.env.local.example` is included in the repo. Deploy `OddLockReferee.py` to GenLayer Studionet, then paste the contract address into your `.env.local`.
 
 ---
 

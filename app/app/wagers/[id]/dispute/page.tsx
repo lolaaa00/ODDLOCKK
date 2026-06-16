@@ -55,12 +55,22 @@ export default function DisputePage() {
   // Permissions
   const perms = useOddLockPermissions(wager);
 
-  async function handleDispute(ground: string, explanation: string) {
+  async function handleDispute(ground: string, explanation: string, evidence?: Array<{ sourceUrl: string; sourceTitle: string; finding: string }>) {
     if (!wager) return;
+    const terms = wager.terms as Record<string, unknown>;
     const packet = JSON.stringify({
       ground,
       explanation,
       wagerId: wager.wagerId,
+      primarySource: terms.primarySource,
+      fallbackSource: terms.fallbackSource,
+      evidence: evidence && evidence.length > 0 ? evidence : [
+        {
+          sourceTitle: "Dispute evidence",
+          sourceUrl: String(terms.primarySource ?? ""),
+          finding: explanation,
+        },
+      ],
     });
     disputeSettlement(wager.wagerId, packet, refetchWager);
   }

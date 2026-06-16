@@ -9,7 +9,7 @@ interface Props {
   disputeWindowOpen: boolean;
   disputeWindowEnds?: number;
   existingDispute?: DisputeReport | null;
-  onDispute?: (ground: string, explanation: string) => Promise<void>;
+  onDispute?: (ground: string, explanation: string, evidence?: Array<{ sourceUrl: string; sourceTitle: string; finding: string }>) => Promise<void>;
 }
 
 export function DisputeBench({

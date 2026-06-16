@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Scale, AlertTriangle, Play, ExternalLink, Clock } from "lucide-react";
+import { Scale, AlertTriangle, Play, ExternalLink, Clock, Plus, Trash2 } from "lucide-react";
 import { useGenLayer } from "@/lib/genlayer/useGenLayer";
 import { useWager, useSettlement } from "@/hooks/useOddLockReads";
 import { useOddLockWrites } from "@/hooks/useOddLockWrites";
@@ -14,6 +14,13 @@ import { SettlementDesk } from "@/components/settlement/SettlementDesk";
 import type { SettlementReport } from "@/types/wager";
 import type { OnChainSettlement } from "@/lib/oddlockContract";
 import type { LocalDraft } from "@/types/wager";
+
+type EvidenceItem = {
+  sourceTitle: string;
+  sourceUrl: string;
+  sourceTier: "PRIMARY" | "FALLBACK" | "TERTIARY";
+  finding: string;
+};
 
 function toSettlementReport(s: OnChainSettlement): SettlementReport {
   return {
@@ -68,6 +75,57 @@ export default function SettlePage() {
   const alreadyResolved = wager ? ["RESOLVED", "DISPUTED", "FINALIZED"].includes(wager.status) : false;
   const busy = txStatus === "signing" || txStatus === "pending";
 
+  // ── Evidence items state ──────────────────────────────────────────────────
+  const defaultEvidence = useMemo<EvidenceItem[]>(() => {
+    if (!wager) return [];
+    const terms = wager.terms as Record<string, unknown>;
+    const items: EvidenceItem[] = [];
+    if (terms.primarySource) {
+      items.push({
+        sourceTitle: "Primary Source",
+        sourceUrl: String(terms.primarySource),
+        sourceTier: "PRIMARY",
+        finding: "",
+      });
+    }
+    if (terms.fallbackSource) {
+      items.push({
+        sourceTitle: "Fallback Source",
+        sourceUrl: String(terms.fallbackSource),
+        sourceTier: "FALLBACK",
+        finding: "",
+      });
+    }
+    return items;
+  }, [wager]);
+
+  const [evidenceItems, setEvidenceItems] = useState<EvidenceItem[]>([]);
+  const [showEvidenceForm, setShowEvidenceForm] = useState(false);
+  const [evidenceInitialised, setEvidenceInitialised] = useState(false);
+
+  // Seed evidence items once when wager loads
+  if (defaultEvidence.length > 0 && !evidenceInitialised && evidenceItems.length === 0) {
+    setEvidenceItems(defaultEvidence);
+    setEvidenceInitialised(true);
+  }
+
+  const updateEvidence = useCallback((index: number, field: keyof EvidenceItem, value: string) => {
+    setEvidenceItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  }, []);
+
+  const addEvidenceItem = useCallback(() => {
+    setEvidenceItems((prev) => [
+      ...prev,
+      { sourceTitle: "", sourceUrl: "", sourceTier: "TERTIARY", finding: "" },
+    ]);
+  }, []);
+
+  const removeEvidenceItem = useCallback((index: number) => {
+    setEvidenceItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   async function handleOpenSettlement() {
     if (!wager) return;
     openSettlement(wager.wagerId, refetchWager);
@@ -76,6 +134,16 @@ export default function SettlePage() {
   async function handleRequestSettlement() {
     if (!wager) return;
     const terms = wager.terms as Record<string, unknown>;
+
+    // Validate that at least one evidence item has a finding
+    const validEvidence = evidenceItems.filter(
+      (e) => e.finding.trim().length > 0 || e.sourceUrl.trim().length > 0
+    );
+    if (validEvidence.length === 0) {
+      setShowEvidenceForm(true);
+      return;
+    }
+
     const packet = {
       wagerId: wager.wagerId,
       question: wager.question,
@@ -88,14 +156,8 @@ export default function SettlePage() {
       cancellationRule: terms.cancellationRule,
       postponementRule: terms.postponementRule,
       invalidIf: terms.invalidIf,
-      evidence: [
-        {
-          sourceTitle: String(terms.primarySource ?? "Primary"),
-          sourceUrl: String(terms.primarySource ?? ""),
-          finding: "Requesting settlement based on locked source policy.",
-        },
-      ],
-      context: "Requesting settlement via OddLock frontend.",
+      evidence: validEvidence,
+      context: "Settlement requested with per-source evidence findings.",
     };
     requestSettlement(wager.wagerId, JSON.stringify(packet), refetchWager);
   }
@@ -168,15 +230,117 @@ export default function SettlePage() {
           )}
 
           {perms.canTriggerResolution && wager.status === "SETTLEMENT_OPEN" && (
-            <button
-              onClick={handleRequestSettlement}
-              disabled={busy}
-              className="w-full flex items-center justify-center gap-2 rounded py-3 font-staatliches text-sm tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50"
-              style={{ background: "var(--deep-vault)", border: "1px solid var(--glass-line)", color: "var(--dim-label)" }}
-            >
-              <Scale className="h-4 w-4" />
-              REQUEST GENLAYER TRIBUNAL
-            </button>
+            <div className="space-y-3">
+              {/* Evidence Form */}
+              <div className="rounded p-4 space-y-3" style={{ border: "1px solid var(--glass-line)", background: "rgba(107,7,14,0.08)" }}>
+                <div className="flex items-center justify-between">
+                  <span className="font-exo text-xs tracking-widest" style={{ color: "var(--dim-label)" }}>
+                    SOURCE EVIDENCE ({evidenceItems.length})
+                  </span>
+                  <button
+                    onClick={() => { setShowEvidenceForm((s) => !s); }}
+                    className="font-exo text-xs tracking-widest transition-colors"
+                    style={{ color: "var(--bio-glow)" }}
+                  >
+                    {showEvidenceForm ? "COLLAPSE" : "EDIT EVIDENCE"}
+                  </button>
+                </div>
+
+                {!showEvidenceForm && evidenceItems.length > 0 && (
+                  <div className="space-y-1">
+                    {evidenceItems.map((e, i) => (
+                      <div key={i} className="flex items-center gap-2 font-azeret text-xs" style={{ color: "var(--dim-label)" }}>
+                        <span className="font-exo text-xs tracking-widest px-1 py-0.5 rounded" style={{ background: "rgba(240,230,226,0.08)" }}>
+                          {e.sourceTier}
+                        </span>
+                        <span className="truncate">{e.sourceUrl || e.sourceTitle || "(no URL)"}</span>
+                        {e.finding ? (
+                          <span style={{ color: "var(--canopy)" }}>✓ finding</span>
+                        ) : (
+                          <span style={{ color: "var(--dispute-signal)" }}>⚠ no finding</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {showEvidenceForm && (
+                  <div className="space-y-3">
+                    <p className="font-nunito text-sm" style={{ color: "var(--dim-label)" }}>
+                      Describe what each locked source shows about the outcome.
+                      The contract will also fetch source content directly via GenLayer web API.
+                    </p>
+                    {evidenceItems.map((e, i) => (
+                      <div key={i} className="rounded p-3 space-y-2" style={{ border: "1px solid rgba(240,230,226,0.1)", background: "rgba(62,34,32,0.50)" }}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={e.sourceTier}
+                              onChange={(ev) => updateEvidence(i, "sourceTier", ev.target.value)}
+                              className="rounded px-2 py-1 font-exo text-xs tracking-widest focus:outline-none"
+                              style={{ border: "1px solid var(--glass-line)", background: "rgba(62,34,32,0.8)", color: "var(--dim-label)" }}
+                            >
+                              <option value="PRIMARY">PRIMARY</option>
+                              <option value="FALLBACK">FALLBACK</option>
+                              <option value="TERTIARY">TERTIARY</option>
+                            </select>
+                            <input
+                              type="text"
+                              placeholder="Source title"
+                              value={e.sourceTitle}
+                              onChange={(ev) => updateEvidence(i, "sourceTitle", ev.target.value)}
+                              className="rounded px-2 py-1 font-nunito text-sm focus:outline-none flex-1"
+                              style={{ border: "1px solid var(--glass-line)", background: "transparent", color: "var(--ink-text)" }}
+                            />
+                          </div>
+                          {evidenceItems.length > 1 && (
+                            <button onClick={() => removeEvidenceItem(i)} className="ml-2 shrink-0 transition-colors" style={{ color: "var(--invalid-alert)" }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="url"
+                          placeholder="Source URL (e.g. https://espn.com/...)"
+                          value={e.sourceUrl}
+                          onChange={(ev) => updateEvidence(i, "sourceUrl", ev.target.value)}
+                          className="w-full rounded px-2 py-1 font-azeret text-sm focus:outline-none"
+                          style={{ border: "1px solid var(--glass-line)", background: "transparent", color: "var(--dim-label)" }}
+                        />
+                        <textarea
+                          placeholder="What does this source show? Describe the specific outcome evidence…"
+                          value={e.finding}
+                          onChange={(ev) => updateEvidence(i, "finding", ev.target.value)}
+                          rows={2}
+                          className="w-full rounded px-2 py-1.5 font-nunito text-sm focus:outline-none resize-none"
+                          style={{ border: "1px solid var(--glass-line)", background: "transparent", color: "var(--ink-text)" }}
+                        />
+                      </div>
+                    ))}
+
+                    {evidenceItems.length < 10 && (
+                      <button
+                        onClick={addEvidenceItem}
+                        className="flex items-center gap-1.5 font-exo text-xs tracking-widest transition-colors"
+                        style={{ color: "var(--dim-label)" }}
+                      >
+                        <Plus className="h-3.5 w-3.5" /> ADD SOURCE
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleRequestSettlement}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 rounded py-3 font-staatliches text-sm tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ background: "var(--deep-vault)", border: "1px solid var(--glass-line)", color: "var(--dim-label)" }}
+              >
+                <Scale className="h-4 w-4" />
+                REQUEST GENLAYER TRIBUNAL
+              </button>
+            </div>
           )}
 
           {wager.status === "LOCKED" && !deadlinePassed && (

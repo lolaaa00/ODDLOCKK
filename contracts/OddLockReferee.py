@@ -42,6 +42,15 @@ If sources conflict, apply the locked conflict rule.
 If cancellation or postponement applies, apply the locked cancellation/postponement rule.
 Return strict JSON only. No markdown. No text outside JSON.
 
+IMPORTANT — SOURCE EVIDENCE:
+The settlement packet includes "fetchedSourceEvidence", which contains the actual page
+content fetched from the locked PRIMARY and FALLBACK source URLs via GenLayer web API.
+You MUST base your findings on this fetched content. If a source fetch failed
+(fetchStatus="FETCH_FAILED"), note this in ambiguityNotes. If both sources failed
+to fetch, return MORE_EVIDENCE_REQUIRED unless the user-submitted evidence items
+contain concrete, verifiable findings tied to the locked source URLs.
+Cross-check user-submitted evidence against the fetched source content where possible.
+
 Responsible-use blocked category rule:
 {blocked_category_note}
 
@@ -100,6 +109,13 @@ If the original outcome is clearly wrong under the locked rules, return REVERSE,
 If more evidence is needed, return MORE_EVIDENCE_REQUIRED.
 Return strict JSON only. No markdown. No text outside JSON.
 
+IMPORTANT — SOURCE EVIDENCE:
+The dispute packet includes "fetchedSourceEvidence" with actual page content fetched
+from the locked PRIMARY and FALLBACK source URLs via GenLayer web API.
+Use this fetched content to verify the disputant's claims and cross-check
+the original settlement findings. If source content has changed since the
+original settlement, note this in ambiguityNotes.
+
 Responsible-use blocked category rule:
 {blocked_category_note}
 
@@ -145,6 +161,10 @@ def _require(condition, message):
 
 
 def _now_ms():
+    # NOTE: wall-clock time; GenLayer validators may see slightly different
+    # values. Deadline checks tolerate small skew because event windows are
+    # measured in hours/days. A future GenLayer API for consensus-agreed
+    # block timestamps would improve determinism here.
     return int(datetime.now(timezone.utc).timestamp() * 1000)
 
 
@@ -155,7 +175,7 @@ def _json_dumps(data):
 def _json_loads(raw, error_message):
     try:
         return json.loads(raw)
-    except Exception:
+    except (ValueError, TypeError):
         raise gl.vm.UserError(error_message)
 
 
@@ -195,14 +215,14 @@ def _clip(value, limit):
 def _safe_int(value, fallback):
     try:
         return int(value)
-    except Exception:
+    except (ValueError, TypeError):
         return fallback
 
 
 def _safe_confidence(value):
     try:
         number = int(value)
-    except Exception:
+    except (ValueError, TypeError):
         number = 0
     if number < 0:
         return 0
@@ -240,7 +260,7 @@ def _safe_list(value, max_items):
         else:
             try:
                 out.append(json.loads(_json_dumps(item)))
-            except Exception:
+            except (ValueError, TypeError):
                 out.append(_clip(str(item), 280))
     return out
 
@@ -263,7 +283,7 @@ def _extract_json_object(raw):
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             return parsed
-    except Exception:
+    except (ValueError, TypeError):
         pass
     start = text.find("{")
     end = text.rfind("}")
@@ -271,7 +291,7 @@ def _extract_json_object(raw):
         raise gl.vm.UserError("validator_did_not_return_json_object")
     try:
         parsed = json.loads(text[start:end + 1])
-    except Exception:
+    except (ValueError, TypeError):
         raise gl.vm.UserError("validator_returned_invalid_json")
     _require(isinstance(parsed, dict), "validator_json_must_be_object")
     return parsed
@@ -594,6 +614,12 @@ class OddLockReferee(gl.Contract):
         _require(now >= opens_at, "settlement_not_open_yet")
         packet = _json_loads_object(settlement_packet_json, "settlement_packet_json_must_be_valid_object")
         self._validate_settlement_packet(packet)
+
+        # ── Fetch locked sources via GenLayer nondeterministic web API ──
+        terms = wager.get("terms", {})
+        fetched_sources = self._fetch_locked_sources(terms)
+        packet["fetchedSourceEvidence"] = fetched_sources
+
         prompt = SETTLEMENT_PROMPT.format(
             blocked_category_note=BLOCKED_CATEGORY_NOTE,
             wager_json=json.dumps(self._wager_prompt_view(wager), indent=2, sort_keys=True),
@@ -603,6 +629,7 @@ class OddLockReferee(gl.Contract):
         report_id = "report_" + _short_hash(wager_id + ":" + _json_dumps(result) + ":" + str(now))
         _require(report_id not in self.settlements, "settlement_report_already_exists")
         report = {"reportId": report_id, "wagerId": wager_id, "reportType": "SETTLEMENT", "createdAt": now, "createdBy": _sender()}
+        report["fetchedSourceEvidence"] = fetched_sources
         for key in result:
             report[key] = result[key]
         self.settlements[report_id] = _json_dumps(report)
@@ -633,6 +660,12 @@ class OddLockReferee(gl.Contract):
         _require(now <= dispute_end, "dispute_window_closed")
         packet = _json_loads_object(dispute_packet_json, "dispute_packet_json_must_be_valid_object")
         self._validate_dispute_packet(packet)
+
+        # ── Fetch locked sources for dispute re-evaluation ──
+        terms = wager.get("terms", {})
+        fetched_sources = self._fetch_locked_sources(terms)
+        packet["fetchedSourceEvidence"] = fetched_sources
+
         original_report = self._get_latest_settlement_for_wager(wager)
         prompt = DISPUTE_PROMPT.format(
             blocked_category_note=BLOCKED_CATEGORY_NOTE,
@@ -668,6 +701,36 @@ class OddLockReferee(gl.Contract):
         self.wagers[wager_id] = _json_dumps(wager)
         self._bump("totalDisputed")
         return dispute_report_id
+
+    def _fetch_locked_sources(self, terms):
+        """
+        Fetch content from the locked primary and fallback source URLs
+        using GenLayer's nondeterministic web API. Returns a list of
+        source evidence objects with the fetched content or fetch errors.
+        """
+        sources_to_fetch = []
+        primary_url = str(terms.get("primarySource", "")).strip()
+        fallback_url = str(terms.get("fallbackSource", "")).strip()
+        if primary_url:
+            sources_to_fetch.append(("PRIMARY", primary_url))
+        if fallback_url:
+            sources_to_fetch.append(("FALLBACK", fallback_url))
+
+        fetched = []
+        for tier, url in sources_to_fetch:
+            entry = {"sourceTier": tier, "sourceUrl": url, "content": "", "fetchStatus": "OK", "fetchError": ""}
+            try:
+                page_content = gl.nondet.get_webpage(url, mode="text")
+                text = str(page_content).strip()
+                # Truncate to avoid overloading the prompt
+                if len(text) > 4000:
+                    text = text[:4000] + "\n[…truncated]"
+                entry["content"] = text
+            except (RuntimeError, OSError) as fetch_err:
+                entry["fetchStatus"] = "FETCH_FAILED"
+                entry["fetchError"] = _clip(str(fetch_err), 300)
+            fetched.append(entry)
+        return fetched
 
     def _run_settlement_review(self, prompt):
         def leader_fn():
@@ -764,9 +827,16 @@ class OddLockReferee(gl.Contract):
         _require(isinstance(evidence, list), "evidence_must_be_array")
         _require(len(evidence) > 0, "at_least_one_evidence_item_required")
         _require(len(evidence) <= 20, "too_many_evidence_items")
+        has_concrete_finding = False
         for item in evidence:
             _require(isinstance(item, dict), "evidence_item_must_be_object")
-            _require(_is_nonempty_str(item.get("sourceUrl", "")) or _is_nonempty_str(item.get("sourceTitle", "")) or _is_nonempty_str(item.get("finding", "")), "evidence_item_must_include_source_or_finding")
+            _require(
+                _is_nonempty_str(item.get("sourceUrl", "")) or _is_nonempty_str(item.get("sourceTitle", "")),
+                "evidence_item_must_include_source_url_or_title"
+            )
+            if _is_nonempty_str(item.get("finding", "")):
+                has_concrete_finding = True
+        _require(has_concrete_finding, "at_least_one_evidence_item_must_have_a_concrete_finding")
 
     def _validate_dispute_packet(self, packet):
         _require(isinstance(packet, dict), "dispute_packet_must_be_object")
@@ -873,7 +943,7 @@ class OddLockReferee(gl.Contract):
                 existing = json.loads(self.user_wagers[account])
                 if not isinstance(existing, list):
                     existing = []
-            except Exception:
+            except (ValueError, TypeError):
                 existing = []
         else:
             existing = []
@@ -948,7 +1018,7 @@ class OddLockReferee(gl.Contract):
             stats = json.loads(self.stats)
             if not isinstance(stats, dict):
                 stats = {}
-        except Exception:
+        except (ValueError, TypeError):
             stats = {}
         stats[key] = int(stats.get(key, 0)) + 1
         self.stats = _json_dumps(stats)
