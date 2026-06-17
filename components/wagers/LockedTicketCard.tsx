@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Lock, Clock, ChevronRight } from "lucide-react";
-import { formatTimestamp } from "@/lib/utils";
+import { formatTimestamp, formatWeiToGen } from "@/lib/utils";
 import type { Wager } from "@/types/wager";
 
 const STATUS_STYLES: Record<string, { label: string; color: string; bg: string }> = {
@@ -82,7 +82,7 @@ export function LockedTicketCard({ wager }: Props) {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 font-azeret text-sm text-[#D4A017]">
             <Lock className="h-3 w-3" />
-            {wager.stakeAmount.toString()} TU
+            {formatWeiToGen(wager.stakeAmount)} GEN
           </div>
           <div className="flex items-center gap-1 font-azeret text-sm text-[rgba(240,230,226,0.40)]">
             <Clock className="h-3 w-3" />

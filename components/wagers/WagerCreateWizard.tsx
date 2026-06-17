@@ -308,7 +308,7 @@ function Step0({ form, set, errors, vague }: { form: FormState; set: (k: keyof F
         <Field label="COUNTERPARTY ADDRESS *" error={errors.counterparty}>
           <input className={inputCls} style={inputStyle} placeholder="0x…" value={form.counterparty} onChange={(e) => set("counterparty", e.target.value)} />
         </Field>
-        <Field label="STAKE AMOUNT (test units) *" error={errors.stakeAmount}>
+        <Field label="STAKE AMOUNT (GEN) *" error={errors.stakeAmount}>
           <input type="number" className={inputCls} style={inputStyle} min="1" value={form.stakeAmount} onChange={(e) => set("stakeAmount", e.target.value)} />
         </Field>
       </div>
@@ -414,7 +414,7 @@ function Step5({ form }: { form: FormState }) {
         <Row label="QUESTION"          value={form.question} />
         <Row label="POSITION A"        value={form.creatorSide} />
         <Row label="POSITION B"        value={form.counterpartySide} />
-        <Row label="STAKE"             value={`${form.stakeAmount} Test Units`} />
+        <Row label="STAKE"             value={`${form.stakeAmount} GEN`} />
         <Row label="COUNTERPARTY"      value={form.counterparty} mono />
         <Row label="DEADLINE"          value={`${form.eventDeadlineDate} ${form.eventDeadlineTime} ${form.timezone}`} />
         <Row label="PRIMARY SOURCE"    value={form.primarySource} mono />
@@ -424,7 +424,7 @@ function Step5({ form }: { form: FormState }) {
       <div className="rounded p-4" style={{ border: "1px solid rgba(240,230,226,0.18)", background: "rgba(200,155,60,0.06)" }}>
         <p className="font-nunito text-sm leading-relaxed" style={{ color: "var(--dim-label)" }}>
           This saves your capsule as a local draft. You can review it and then publish it to
-          GenLayer Studionet from the draft detail page. All stakes are internal test units with no real monetary value.
+          GenLayer Studionet from the draft detail page. All stakes are GEN on Studionet and have no real monetary value.
         </p>
       </div>
     </div>

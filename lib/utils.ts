@@ -35,6 +35,25 @@ export function formatTimestamp(ts: number): string {
   });
 }
 
+export function formatWeiToGen(value: bigint | string, maxDecimals = 4): string {
+  let raw: bigint;
+  try {
+    raw = typeof value === "bigint" ? value : BigInt(String(value));
+  } catch {
+    return String(value);
+  }
+  const negative = raw < 0n;
+  const wei = negative ? -raw : raw;
+  const base = 10n ** 18n;
+  const whole = wei / base;
+  const fraction = wei % base;
+
+  let frac = fraction.toString().padStart(18, "0").slice(0, Math.max(0, maxDecimals));
+  frac = frac.replace(/0+$/, "");
+  const formatted = frac ? `${whole.toString()}.${frac}` : whole.toString();
+  return negative ? `-${formatted}` : formatted;
+}
+
 export function isDeadlinePassed(ts: number): boolean {
   return Date.now() > ts;
 }

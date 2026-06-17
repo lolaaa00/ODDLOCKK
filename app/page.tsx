@@ -174,7 +174,7 @@ export default function LandingPage() {
           lineHeight: 1.55, maxWidth: 820, margin: "0 auto",
         }}>
           ⚠ OddLock is a Studionet/testnet outcome settlement demo. Not a real-money gambling product,
-          sportsbook, casino, licensed wagering service, or financial product. All stakes are internal test units only.
+          sportsbook, casino, licensed wagering service, or financial product. All stakes are GEN on testnet only.
         </p>
       </div>
 

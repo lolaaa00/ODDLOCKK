@@ -14,6 +14,8 @@
 
 OddLock is a GenLayer-native P2P outcome wager settlement dApp. Two users lock event terms, trusted sources, and testnet stakes before an outcome happens. GenLayer acts as a source-aware referee when it is time to settle.
 
+All user-facing stake amounts are shown as `GEN` on the frontend, while the contract still receives the exact on-chain value it needs internally.
+
 ```
 QUESTION → SIDE SEALS → SOURCE CHAIN → LOCKED TICKET → GENLAYER REFEREE → DISPUTE WINDOW → FINAL SEAL
 ```

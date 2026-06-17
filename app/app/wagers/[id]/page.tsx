@@ -25,7 +25,7 @@ import { TermsLockPanel } from "@/components/wagers/TermsLockPanel";
 import { StakeTestUnitBox } from "@/components/wagers/StakeTestUnitBox";
 import { EventCountdown } from "@/components/wagers/EventCountdown";
 import type { LocalDraft, WagerTerms } from "@/types/wager";
-import { sha256Hex, formatTimestamp } from "@/lib/utils";
+import { sha256Hex, formatTimestamp, formatWeiToGen } from "@/lib/utils";
 
 const FALLBACK_DEADLINE = Date.now() + 86400000;
 
@@ -323,7 +323,7 @@ export default function WagerDetailPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <StakeTestUnitBox amount={wager.stakeAmountWei} currencyMode="INTERNAL_TEST_UNITS" />
+          <StakeTestUnitBox amount={formatWeiToGen(wager.stakeAmountWei)} currencyMode="INTERNAL_TEST_UNITS" />
           <EventCountdown deadline={wager.eventDeadline} />
         </div>
 
@@ -365,7 +365,7 @@ export default function WagerDetailPage() {
           {wager.totalEscrowedWei && wager.totalEscrowedWei !== "0" && (
             <div className="flex justify-between">
               <span className="font-exo text-xs tracking-widest" style={{ color: "var(--dim-label)" }}>ESCROWED</span>
-              <span className="font-azeret text-xs" style={{ color: "var(--dim-label)" }}>{wager.totalEscrowedWei} wei</span>
+              <span className="font-azeret text-xs" style={{ color: "var(--dim-label)" }}>{formatWeiToGen(wager.totalEscrowedWei)} GEN</span>
             </div>
           )}
         </div>
@@ -384,7 +384,7 @@ export default function WagerDetailPage() {
               <button onClick={() => fundWager(wager.wagerId, BigInt(wager.stakeAmountWei), refetch)}
                 disabled={busy}
                 className="btn-tribunal w-full rounded py-3 font-staatliches text-sm tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50">
-                FUND CAPSULE ({wager.stakeAmountWei} wei)
+                FUND CAPSULE ({formatWeiToGen(wager.stakeAmountWei)} GEN)
               </button>
             )}
             {perms.canCancelWager && (
@@ -520,7 +520,7 @@ export default function WagerDetailPage() {
               <div className="flex justify-between items-center">
                 <span className="font-exo text-xs tracking-widest" style={{ color: "var(--dim-label)" }}>STAKE</span>
                 <span className="font-azeret text-xs" style={{ color: "var(--dim-label)" }}>
-                  {draft.stakeAmount} test units
+                  {draft.stakeAmount} GEN
                 </span>
               </div>
             )}
@@ -745,8 +745,8 @@ function DebugPanel({
     ["Counterparty", wager?.counterparty || draft?.counterparty || "—"],
     ["Creator Funded", wager ? (wager.creatorFunded ? "Yes" : "No") : "—"],
     ["Counterparty Funded", wager ? (wager.counterpartyFunded ? "Yes" : "No") : "—"],
-    ["Stake (wei)", wager?.stakeAmountWei || "—"],
-    ["Total Escrowed (wei)", wager?.totalEscrowedWei || "—"],
+    ["Stake (GEN)", wager ? `${formatWeiToGen(wager.stakeAmountWei)} GEN` : "—"],
+    ["Total Escrowed (GEN)", wager?.totalEscrowedWei ? `${formatWeiToGen(wager.totalEscrowedWei)} GEN` : "—"],
     ["Event Deadline", wager?.eventDeadline ? formatTimestamp(wager.eventDeadline) : "—"],
     ["Settlement Opens At", wager?.settlementOpensAt ? formatTimestamp(wager.settlementOpensAt) : "—"],
     ["Settlement Report ID", wager?.settlementReportId || "—"],

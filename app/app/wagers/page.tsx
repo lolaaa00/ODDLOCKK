@@ -9,7 +9,7 @@ import { useUserWagers } from "@/hooks/useOddLockReads";
 import { getStatusStyle } from "@/utils/oddlockStates";
 import type { OnChainWager } from "@/lib/oddlockContract";
 import type { LocalDraft } from "@/types/wager";
-import { formatTimestamp } from "@/lib/utils";
+import { formatTimestamp, formatWeiToGen } from "@/lib/utils";
 
 export default function WagersPage() {
   const [drafts, setDrafts] = useState<LocalDraft[]>([]);
@@ -151,7 +151,7 @@ function ChainCapsuleCard({ wager }: { wager: OnChainWager }) {
       </div>
       <div className="flex items-center justify-between">
         <span className="font-changa text-sm" style={{ color: "var(--dim-label)" }}>
-          {wager.stakeAmountWei} wei
+          {formatWeiToGen(wager.stakeAmountWei)} GEN
         </span>
         <span className="font-azeret text-xs" style={{ color: "var(--dim-label)" }}>
           {formatTimestamp(wager.eventDeadline)}

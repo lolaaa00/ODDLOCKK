@@ -11,7 +11,7 @@ interface Props {
 
 export function StakeTestUnitBox({ amount, currencyMode, label = "STAKE" }: Props) {
   const displayAmount = typeof amount === "bigint" ? amount.toString() : amount;
-  const unitLabel = currencyMode === "TESTNET_GEN" ? "GEN (testnet)" : "Test Units";
+  const unitLabel = currencyMode === "TESTNET_GEN" ? "GEN" : "GEN";
 
   return (
     <div className="rounded-sm border border-[#D4A017]/30 bg-[#D4A017]/6 p-4">

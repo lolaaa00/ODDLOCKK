@@ -72,7 +72,7 @@ export function ResponsibleUsePanel() {
 
         <Toggle
           label="Capsule Limit"
-          description="Limit total stake to 1000 test units per session"
+          description="Limit total stake to 1000 GEN per session"
           active={settings.wagerlimitEnabled}
           onChange={(v) => update({ wagerlimitEnabled: v })}
         />

@@ -43,7 +43,7 @@ export function ResponsibleUseLock() {
             product, sportsbook, casino, licensed wagering service, or financial product.
           </p>
           <p>
-            All stakes are <strong>testnet/internal test units only</strong>. No real
+            All stakes are <strong>GEN on testnet only</strong>. No real
             monetary value is involved.
           </p>
           <p>
