@@ -51,6 +51,7 @@ export function RefereePlayground() {
       winningSide: "N/A",
       summary:
         "This is a playground simulation. Connect to GenLayer Studionet and deploy OddLockReferee to receive a real settlement verdict.",
+      fetchedSourceEvidence: [],
       evidenceTrace: [],
       ruleApplication: [
         {

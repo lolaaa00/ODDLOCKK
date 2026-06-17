@@ -12,8 +12,9 @@ export default function SourcesPage() {
 
       <p className="font-nunito text-base leading-relaxed" style={{ color: "var(--dim-label)" }}>
         OddLock requires that every wager defines a primary and fallback source before
-        locking. GenLayer uses these sources when rendering a settlement verdict.
-        Sources must be public, authoritative, and not controllable by either party.
+        locking. Settlement and objection evidence must reference those locked URLs,
+        and GenLayer fetches their page content before rendering a verdict. Sources
+        must be public, authoritative, and not controllable by either party.
       </p>
 
       {/* Source tier guide */}
@@ -97,9 +98,10 @@ export default function SourcesPage() {
       {/* Note */}
       <div className="rounded p-4" style={{ border: "1px solid var(--glass-line)", background: "var(--soft-panel)" }}>
         <p className="font-nunito text-sm leading-relaxed" style={{ color: "var(--dim-label)" }}>
-          OddLock does not validate URLs at creation time. GenLayer will assess source
-          reliability and manipulation risk during settlement and include a source assessment
-          in the referee verdict.
+          OddLock validates public source URLs before locking. During settlement and
+          objection review, the contract fetches those locked URLs, stores the fetch
+          record with the report, and includes reliability and manipulation-risk
+          assessment in the referee verdict.
         </p>
       </div>
     </div>

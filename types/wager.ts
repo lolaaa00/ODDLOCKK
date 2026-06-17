@@ -108,6 +108,14 @@ export type SourceAssessment = {
   notes: string;
 };
 
+export type FetchedSourceEvidence = {
+  sourceTier: "PRIMARY" | "FALLBACK";
+  sourceUrl: string;
+  content: string;
+  fetchStatus: "OK" | "FETCH_FAILED";
+  fetchError: string;
+};
+
 export type SettlementReport = {
   reportId: string;
   wagerId: string;
@@ -115,6 +123,7 @@ export type SettlementReport = {
   confidence: number;
   winningSide: string;
   summary: string;
+  fetchedSourceEvidence: FetchedSourceEvidence[];
   evidenceTrace: EvidenceTrace[];
   ruleApplication: RuleApplication[];
   sourceAssessment: SourceAssessment[];
@@ -131,6 +140,7 @@ export type DisputeReport = {
   outcome: DisputeOutcome;
   confidence: number;
   summary: string;
+  fetchedSourceEvidence: FetchedSourceEvidence[];
   evidenceTrace: EvidenceTrace[];
   ruleApplication: RuleApplication[];
   responsibleUseNote: string;

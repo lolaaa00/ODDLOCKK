@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
@@ -10,7 +10,7 @@ import { useOddLockPermissions } from "@/hooks/useOddLockPermissions";
 import { isContractConfigured } from "@/lib/genlayerClient";
 import { getDrafts } from "@/lib/storage/drafts";
 import { DisputeBench } from "@/components/disputes/DisputeBench";
-import type { DisputeReport, LocalDraft } from "@/types/wager";
+import type { DisputeReport } from "@/types/wager";
 import type { OnChainDispute } from "@/lib/oddlockContract";
 
 function toDisputeReport(d: OnChainDispute): DisputeReport {
@@ -21,6 +21,7 @@ function toDisputeReport(d: OnChainDispute): DisputeReport {
     outcome: d.outcome as DisputeReport["outcome"],
     confidence: d.confidence,
     summary: d.summary,
+    fetchedSourceEvidence: (d.fetchedSourceEvidence as DisputeReport["fetchedSourceEvidence"] | undefined) ?? [],
     evidenceTrace: d.evidenceTrace as DisputeReport["evidenceTrace"],
     ruleApplication: d.ruleApplication as DisputeReport["ruleApplication"],
     responsibleUseNote: d.responsibleUseNote,
@@ -33,12 +34,12 @@ export default function DisputePage() {
   const contractReady = isContractConfigured();
 
   // Resolve draft ID → on-chain ID
-  const [draftFallback, setDraftFallback] = useState<LocalDraft | null>(null);
-  const [draftChecked, setDraftChecked] = useState(false);
-  useEffect(() => {
-    setDraftFallback(getDrafts().find((d) => d.draftId === id) ?? null);
-    setDraftChecked(true);
-  }, [id]);
+  const draftFallback = useSyncExternalStore(
+    () => () => {},
+    () => getDrafts().find((d) => d.draftId === id) ?? null,
+    () => null
+  );
+  const draftChecked = true;
 
   const contractWagerId = draftFallback?.contractWagerId || "";
   const onChainId = !draftChecked
@@ -54,6 +55,7 @@ export default function DisputePage() {
 
   // Permissions
   const perms = useOddLockPermissions(wager);
+  const terms = wager?.terms as Record<string, unknown> | undefined;
 
   async function handleDispute(ground: string, explanation: string, evidence?: Array<{ sourceUrl: string; sourceTitle: string; finding: string }>) {
     if (!wager) return;
@@ -65,11 +67,8 @@ export default function DisputePage() {
       primarySource: terms.primarySource,
       fallbackSource: terms.fallbackSource,
       evidence: evidence && evidence.length > 0 ? evidence : [
-        {
-          sourceTitle: "Dispute evidence",
-          sourceUrl: String(terms.primarySource ?? ""),
-          finding: explanation,
-        },
+        { sourceTitle: "Primary Source", sourceUrl: String(terms.primarySource ?? ""), finding: explanation },
+        { sourceTitle: "Fallback Source", sourceUrl: String(terms.fallbackSource ?? ""), finding: explanation },
       ],
     });
     disputeSettlement(wager.wagerId, packet, refetchWager);
@@ -116,6 +115,8 @@ export default function DisputePage() {
       <DisputeBench
         wagerId={id}
         disputeWindowOpen={canWrite && perms.canDispute}
+        primarySource={String(terms?.primarySource ?? "")}
+        fallbackSource={String(terms?.fallbackSource ?? "")}
         existingDispute={dispute ? toDisputeReport(dispute) : null}
         onDispute={handleDispute}
       />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Scale, AlertTriangle, Play, ExternalLink, Clock, Plus, Trash2 } from "lucide-react";
@@ -13,7 +13,6 @@ import { getDrafts } from "@/lib/storage/drafts";
 import { SettlementDesk } from "@/components/settlement/SettlementDesk";
 import type { SettlementReport } from "@/types/wager";
 import type { OnChainSettlement } from "@/lib/oddlockContract";
-import type { LocalDraft } from "@/types/wager";
 
 type EvidenceItem = {
   sourceTitle: string;
@@ -30,6 +29,7 @@ function toSettlementReport(s: OnChainSettlement): SettlementReport {
     confidence: s.confidence,
     winningSide: s.winningSide,
     summary: s.summary,
+    fetchedSourceEvidence: (s.fetchedSourceEvidence as SettlementReport["fetchedSourceEvidence"] | undefined) ?? [],
     evidenceTrace: s.evidenceTrace as SettlementReport["evidenceTrace"],
     ruleApplication: s.ruleApplication as SettlementReport["ruleApplication"],
     sourceAssessment: s.sourceAssessment as SettlementReport["sourceAssessment"],
@@ -46,12 +46,13 @@ export default function SettlePage() {
   const contractReady = isContractConfigured();
 
   // Local draft fallback — resolve contractWagerId if this is a draft ID
-  const [draftFallback, setDraftFallback] = useState<LocalDraft | null>(null);
-  const [draftChecked, setDraftChecked] = useState(false);
-  useEffect(() => {
-    setDraftFallback(getDrafts().find((d) => d.draftId === id) ?? null);
-    setDraftChecked(true);
-  }, [id]);
+  const draftFallback = useSyncExternalStore(
+    () => () => {},
+    () => getDrafts().find((d) => d.draftId === id) ?? null,
+    () => null
+  );
+  const draftChecked = true;
+  const [now] = useState(() => Date.now());
 
   // Resolve the on-chain wager ID: use contractWagerId from draft if available.
   // Wait for draft check to avoid flash errors.
@@ -70,8 +71,8 @@ export default function SettlePage() {
   // Permissions
   const perms = useOddLockPermissions(wager);
 
-  const deadlinePassed = wager ? Date.now() > wager.eventDeadline : false;
-  const settlementOpensAtPassed = wager ? Date.now() >= wager.settlementOpensAt : false;
+  const deadlinePassed = wager ? now > wager.eventDeadline : false;
+  const settlementOpensAtPassed = wager ? now >= wager.settlementOpensAt : false;
   const alreadyResolved = wager ? ["RESOLVED", "DISPUTED", "FINALIZED"].includes(wager.status) : false;
   const busy = txStatus === "signing" || txStatus === "pending";
 
@@ -134,12 +135,15 @@ export default function SettlePage() {
   async function handleRequestSettlement() {
     if (!wager) return;
     const terms = wager.terms as Record<string, unknown>;
+    const lockedSourceUrls = [terms.primarySource, terms.fallbackSource]
+      .map((url) => String(url ?? "").trim())
+      .filter(Boolean);
 
-    // Validate that at least one evidence item has a finding
     const validEvidence = evidenceItems.filter(
-      (e) => e.finding.trim().length > 0 || e.sourceUrl.trim().length > 0
+      (e) => e.finding.trim().length > 0 && lockedSourceUrls.includes(e.sourceUrl.trim())
     );
-    if (validEvidence.length === 0) {
+    const coveredUrls = new Set(validEvidence.map((e) => e.sourceUrl.trim()));
+    if (lockedSourceUrls.some((url) => !coveredUrls.has(url))) {
       setShowEvidenceForm(true);
       return;
     }

@@ -72,6 +72,13 @@ export const settlementReportSchema = z.object({
   confidence: z.number().min(0).max(100),
   winningSide: z.string().min(1),
   summary: z.string().min(1),
+  fetchedSourceEvidence: z.array(z.object({
+    sourceTier: z.enum(["PRIMARY", "FALLBACK"]),
+    sourceUrl: z.string(),
+    content: z.string(),
+    fetchStatus: z.enum(["OK", "FETCH_FAILED"]),
+    fetchError: z.string(),
+  })),
   evidenceTrace: z.array(z.object({
     sourceTitle: z.string(),
     sourceUrl: z.string(),

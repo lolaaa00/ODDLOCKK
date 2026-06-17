@@ -24,12 +24,15 @@ OddLock does **not** ask GenLayer to create bets. It asks GenLayer to referee lo
 
 When settlement is requested, the contract:
 
-1. Accepts user-submitted evidence items (per-source findings tied to locked URLs)
+1. Requires user-submitted evidence findings for each locked source URL
 2. Fetches the locked PRIMARY and FALLBACK source URLs via `gl.nondet.get_webpage()` (GenLayer nondeterministic web API)
 3. Passes both the user-submitted and contract-fetched source content to the GenLayer LLM referee
-4. The referee cross-checks user claims against fetched content, applies locked rules, and returns a structured verdict
+4. Stores the fetched source records with the settlement/dispute report
+5. The referee cross-checks user claims against fetched content, applies locked rules, and returns a structured verdict
 
-This ensures settlement is grounded in actual source data, not just a generic "settle this" request. The same source-fetching applies during dispute review.
+Settlement and dispute packets are rejected unless their evidence URLs match the locked primary/fallback sources. The resolution room displays the fetched source records, source assessments, rule application, and evidence trace so the source path is visible after the verdict.
+
+OddLock uses coarse wall-clock timestamps for lifecycle windows because the current Studionet contract runtime used here does not expose a consensus block timestamp. Those checks are limited to hour/day-sized windows; verdicts are grounded in locked terms and fetched source evidence.
 
 ---
 
@@ -70,6 +73,8 @@ No Privy. No Firebase. No Supabase. No OpenAI. No external AI. No real-money pay
 Contract name: `OddLockReferee`  
 File: `contracts/OddLockReferee.py`
 
+Current deployed address: `0xC2DBe9C792717A89c1BFA6F532d5105b13A4E755`
+
 Deploy to GenLayer Studionet, then set `NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS` in `.env.local`.
 
 ---
@@ -82,7 +87,7 @@ cp .env.local.example .env.local   # edit NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS
 npm run dev
 ```
 
-A working `.env.local.example` is included in the repo. Deploy `OddLockReferee.py` to GenLayer Studionet, then paste the contract address into your `.env.local`.
+A working `.env.local.example` is included in the repo and is prefilled with the current contract address. Deploy `OddLockReferee.py` to GenLayer Studionet, then keep your local `.env.local` in sync with the deployed address.
 
 ---
 

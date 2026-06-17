@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { RefereeSeal } from "./RefereeSeal";
 import { EvidenceTrace } from "./EvidenceTrace";
+import { FetchedSourceEvidence } from "./FetchedSourceEvidence";
 import { RuleApplication } from "./RuleApplication";
 import { SourceChain } from "./SourceChain";
 import type { SettlementReport } from "@/types/wager";
@@ -19,7 +20,7 @@ const GL = "rgba(107,7,14,0.08)";
 const GL_BORDER = "rgba(203,194,192,0.13)";
 
 export function SettlementDesk({ report, primarySource, fallbackSource }: Props) {
-  const [openSection, setOpenSection] = useState<string | null>("evidence");
+  const [openSection, setOpenSection] = useState<string | null>("fetched");
 
   function toggle(s: string) {
     setOpenSection((c) => (c === s ? null : s));
@@ -59,6 +60,12 @@ export function SettlementDesk({ report, primarySource, fallbackSource }: Props)
 
       {/* Collapsible sections */}
       {[
+        {
+          id: "fetched",
+          label: "FETCHED SOURCES",
+          count: report.fetchedSourceEvidence.length,
+          content: <FetchedSourceEvidence sources={report.fetchedSourceEvidence} />,
+        },
         {
           id: "evidence",
           label: "EVIDENCE LEDGER",

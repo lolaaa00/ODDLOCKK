@@ -161,10 +161,11 @@ def _require(condition, message):
 
 
 def _now_ms():
-    # NOTE: wall-clock time; GenLayer validators may see slightly different
-    # values. Deadline checks tolerate small skew because event windows are
-    # measured in hours/days. A future GenLayer API for consensus-agreed
-    # block timestamps would improve determinism here.
+    # Intentional coarse wall-clock time. GenLayer does not expose a
+    # consensus block timestamp in the current Studionet contract runtime used
+    # here, so OddLock only uses this for hour/day-sized lifecycle windows.
+    # Settlement itself still depends on locked terms and fetched source
+    # evidence, not validator-local timestamps.
     return int(datetime.now(timezone.utc).timestamp() * 1000)
 
 
@@ -203,6 +204,11 @@ def _sender():
 
 def _is_nonempty_str(value):
     return isinstance(value, str) and bool(value.strip())
+
+
+def _is_public_url(value):
+    text = str(value).strip().lower()
+    return text.startswith("https://") or text.startswith("http://")
 
 
 def _clip(value, limit):
@@ -612,11 +618,11 @@ class OddLockReferee(gl.Contract):
         now = _now_ms()
         opens_at = _safe_int(wager.get("settlementOpensAt", 0), 0)
         _require(now >= opens_at, "settlement_not_open_yet")
+        terms = wager.get("terms", {})
         packet = _json_loads_object(settlement_packet_json, "settlement_packet_json_must_be_valid_object")
-        self._validate_settlement_packet(packet)
+        self._validate_settlement_packet(packet, terms)
 
         # ── Fetch locked sources via GenLayer nondeterministic web API ──
-        terms = wager.get("terms", {})
         fetched_sources = self._fetch_locked_sources(terms)
         packet["fetchedSourceEvidence"] = fetched_sources
 
@@ -658,11 +664,11 @@ class OddLockReferee(gl.Contract):
         dispute_end = resolved_at + (dispute_hours * 3600 * 1000)
         now = _now_ms()
         _require(now <= dispute_end, "dispute_window_closed")
+        terms = wager.get("terms", {})
         packet = _json_loads_object(dispute_packet_json, "dispute_packet_json_must_be_valid_object")
-        self._validate_dispute_packet(packet)
+        self._validate_dispute_packet(packet, terms)
 
         # ── Fetch locked sources for dispute re-evaluation ──
-        terms = wager.get("terms", {})
         fetched_sources = self._fetch_locked_sources(terms)
         packet["fetchedSourceEvidence"] = fetched_sources
 
@@ -677,6 +683,7 @@ class OddLockReferee(gl.Contract):
         dispute_report_id = "dispute_" + _short_hash(wager_id + ":" + caller + ":" + _json_dumps(result) + ":" + str(now))
         _require(dispute_report_id not in self.disputes, "dispute_report_already_exists")
         dispute_report = {"reportId": dispute_report_id, "wagerId": wager_id, "reportType": "DISPUTE", "createdAt": now, "createdBy": caller, "ground": _clip(packet.get("ground", "UNSPECIFIED"), 120)}
+        dispute_report["fetchedSourceEvidence"] = fetched_sources
         for key in result:
             dispute_report[key] = result[key]
         self.disputes[dispute_report_id] = _json_dumps(dispute_report)
@@ -808,6 +815,9 @@ class OddLockReferee(gl.Contract):
         _require(_is_nonempty_str(terms.get("invalidIf", "")), "invalid_rule_required")
         _require(_is_nonempty_str(terms.get("timezone", "")), "timezone_required")
         _require(_is_nonempty_str(terms.get("primarySource", "")), "primary_source_required")
+        _require(_is_nonempty_str(terms.get("fallbackSource", "")), "fallback_source_required")
+        _require(_is_public_url(terms.get("primarySource", "")), "primary_source_must_be_public_url")
+        _require(_is_public_url(terms.get("fallbackSource", "")), "fallback_source_must_be_public_url")
         _require(_is_nonempty_str(terms.get("conflictRule", "")), "conflict_rule_required")
         _require(_is_nonempty_str(terms.get("cancellationRule", "")), "cancellation_rule_required")
         _require(_is_nonempty_str(terms.get("postponementRule", "")), "postponement_rule_required")
@@ -821,31 +831,52 @@ class OddLockReferee(gl.Contract):
         for word in unsafe_terms:
             _require(word not in question_lower, "blocked_or_unsafe_wager_category")
 
-    def _validate_settlement_packet(self, packet):
+    def _locked_source_urls(self, terms):
+        urls = []
+        for key in ("primarySource", "fallbackSource"):
+            url = str(terms.get(key, "")).strip().lower()
+            if url and url not in urls:
+                urls.append(url)
+        return urls
+
+    def _validate_source_linked_evidence(self, evidence, terms, prefix):
+        locked_urls = self._locked_source_urls(terms)
+        _require(len(locked_urls) > 0, prefix + "_locked_sources_missing")
+        covered = {}
+        for url in locked_urls:
+            covered[url] = False
+
+        has_concrete_finding = False
+        for item in evidence:
+            _require(isinstance(item, dict), prefix + "_evidence_item_must_be_object")
+            source_url = str(item.get("sourceUrl", "")).strip().lower()
+            _require(_is_nonempty_str(item.get("sourceUrl", "")), prefix + "_evidence_item_must_include_source_url")
+            _require(source_url in locked_urls, prefix + "_evidence_must_match_locked_source")
+            _require(_is_nonempty_str(item.get("finding", "")), prefix + "_evidence_item_must_have_finding")
+            has_concrete_finding = True
+            covered[source_url] = True
+
+        _require(has_concrete_finding, prefix + "_at_least_one_evidence_item_must_have_a_concrete_finding")
+        for url in locked_urls:
+            _require(covered[url], prefix + "_evidence_must_cover_each_locked_source")
+
+    def _validate_settlement_packet(self, packet, terms):
         _require(isinstance(packet, dict), "settlement_packet_must_be_object")
         evidence = packet.get("evidence", [])
         _require(isinstance(evidence, list), "evidence_must_be_array")
         _require(len(evidence) > 0, "at_least_one_evidence_item_required")
         _require(len(evidence) <= 20, "too_many_evidence_items")
-        has_concrete_finding = False
-        for item in evidence:
-            _require(isinstance(item, dict), "evidence_item_must_be_object")
-            _require(
-                _is_nonempty_str(item.get("sourceUrl", "")) or _is_nonempty_str(item.get("sourceTitle", "")),
-                "evidence_item_must_include_source_url_or_title"
-            )
-            if _is_nonempty_str(item.get("finding", "")):
-                has_concrete_finding = True
-        _require(has_concrete_finding, "at_least_one_evidence_item_must_have_a_concrete_finding")
+        self._validate_source_linked_evidence(evidence, terms, "settlement")
 
-    def _validate_dispute_packet(self, packet):
+    def _validate_dispute_packet(self, packet, terms):
         _require(isinstance(packet, dict), "dispute_packet_must_be_object")
         _require(_is_nonempty_str(packet.get("ground", "")), "dispute_ground_required")
         _require(_is_nonempty_str(packet.get("explanation", "")), "dispute_explanation_required")
         evidence = packet.get("evidence", packet.get("counterEvidence", []))
-        if evidence:
-            _require(isinstance(evidence, list), "dispute_evidence_must_be_array")
-            _require(len(evidence) <= 20, "too_many_dispute_evidence_items")
+        _require(isinstance(evidence, list), "dispute_evidence_must_be_array")
+        _require(len(evidence) > 0, "at_least_one_dispute_evidence_item_required")
+        _require(len(evidence) <= 20, "too_many_dispute_evidence_items")
+        self._validate_source_linked_evidence(evidence, terms, "dispute")
 
     def _normalise_trace_item(self, item, allowed_supports):
         if not isinstance(item, dict):

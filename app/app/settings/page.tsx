@@ -91,7 +91,7 @@ export default function SettingsPage() {
             style={{ color: "var(--dim-label)" }}
           >
 {`NEXT_PUBLIC_APP_NAME=OddLock
-NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS=<deploy OddLockReferee here>
+NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS=${CONTRACT_ADDRESS || "<deploy OddLockReferee here>"}
 NEXT_PUBLIC_GENLAYER_CHAIN_ID=61999
 NEXT_PUBLIC_GENLAYER_RPC_URL=https://studio.genlayer.com/api
 NEXT_PUBLIC_GENLAYER_EXPLORER_URL=https://explorer-studio.genlayer.com

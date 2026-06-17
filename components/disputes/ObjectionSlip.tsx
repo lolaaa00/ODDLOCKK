@@ -17,15 +17,21 @@ type CounterEvidence = { sourceUrl: string; sourceTitle: string; finding: string
 
 interface Props {
   wagerId: string;
+  primarySource?: string;
+  fallbackSource?: string;
   onSubmit?: (ground: string, explanation: string, evidence?: CounterEvidence[]) => Promise<void>;
 }
 
-export function ObjectionSlip({ onSubmit }: Props) {
+export function ObjectionSlip({ primarySource, fallbackSource, onSubmit }: Props) {
+  const lockedEvidence = [
+    primarySource ? { sourceUrl: primarySource, sourceTitle: "Primary Source", finding: "" } : null,
+    fallbackSource ? { sourceUrl: fallbackSource, sourceTitle: "Fallback Source", finding: "" } : null,
+  ].filter((item): item is CounterEvidence => Boolean(item));
   const [ground, setGround] = useState("");
   const [explanation, setExplanation] = useState("");
-  const [counterEvidence, setCounterEvidence] = useState<CounterEvidence[]>([
-    { sourceUrl: "", sourceTitle: "", finding: "" },
-  ]);
+  const [counterEvidence, setCounterEvidence] = useState<CounterEvidence[]>(
+    lockedEvidence.length > 0 ? lockedEvidence : [{ sourceUrl: "", sourceTitle: "", finding: "" }]
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -46,8 +52,15 @@ export function ObjectionSlip({ onSubmit }: Props) {
   async function handleSubmit() {
     if (!ground) { setError("Select a dispute ground"); return; }
     if (explanation.trim().length < 20) { setError("Provide a detailed explanation (min 20 chars)"); return; }
-    const validEvidence = counterEvidence.filter((e) => e.finding.trim().length > 0);
-    if (validEvidence.length === 0) { setError("Provide at least one counter-evidence finding"); return; }
+    const lockedUrls = [primarySource, fallbackSource].map((url) => String(url ?? "").trim()).filter(Boolean);
+    const validEvidence = counterEvidence.filter(
+      (e) => e.finding.trim().length > 0 && lockedUrls.includes(e.sourceUrl.trim())
+    );
+    const coveredUrls = new Set(validEvidence.map((e) => e.sourceUrl.trim()));
+    if (lockedUrls.some((url) => !coveredUrls.has(url))) {
+      setError("Provide a counter-evidence finding for each locked source");
+      return;
+    }
     setError("");
     setSubmitting(true);
     try {

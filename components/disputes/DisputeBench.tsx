@@ -2,12 +2,15 @@
 
 import { Gavel, Clock } from "lucide-react";
 import { ObjectionSlip } from "./ObjectionSlip";
+import { FetchedSourceEvidence } from "@/components/settlement/FetchedSourceEvidence";
 import type { DisputeReport } from "@/types/wager";
 
 interface Props {
   wagerId: string;
   disputeWindowOpen: boolean;
   disputeWindowEnds?: number;
+  primarySource?: string;
+  fallbackSource?: string;
   existingDispute?: DisputeReport | null;
   onDispute?: (ground: string, explanation: string, evidence?: Array<{ sourceUrl: string; sourceTitle: string; finding: string }>) => Promise<void>;
 }
@@ -16,6 +19,8 @@ export function DisputeBench({
   wagerId,
   disputeWindowOpen,
   disputeWindowEnds,
+  primarySource,
+  fallbackSource,
   existingDispute,
   onDispute,
 }: Props) {
@@ -44,21 +49,36 @@ export function DisputeBench({
       )}
 
       {existingDispute && (
-        <div className="rounded p-5" style={{ border: "1px solid rgba(200,155,60,0.28)", background: "rgba(107,7,14,0.08)" }}>
-          <div className="font-exo text-xs tracking-widest mb-2" style={{ color: "var(--dim-label)" }}>OBJECTION FILED</div>
-          <div className="font-nunito text-base mb-3" style={{ color: "var(--ink-text)" }}>
-            Ground: <span className="font-azeret">{existingDispute.ground}</span>
+        <>
+          <div className="rounded p-5" style={{ border: "1px solid rgba(200,155,60,0.28)", background: "rgba(107,7,14,0.08)" }}>
+            <div className="font-exo text-xs tracking-widest mb-2" style={{ color: "var(--dim-label)" }}>OBJECTION FILED</div>
+            <div className="font-nunito text-base mb-3" style={{ color: "var(--ink-text)" }}>
+              Ground: <span className="font-azeret">{existingDispute.ground}</span>
+            </div>
+            <div className="font-exo text-xs tracking-widest mb-1" style={{ color: "var(--dim-label)" }}>TRIBUNAL VERDICT</div>
+            <div className="font-staatliches text-base md:text-xl tracking-widest mb-2" style={{ color: "var(--ink-text)" }}>
+              {existingDispute.outcome}
+            </div>
+            <p className="font-nunito text-base" style={{ color: "var(--dim-label)" }}>{existingDispute.summary}</p>
           </div>
-          <div className="font-exo text-xs tracking-widest mb-1" style={{ color: "var(--dim-label)" }}>TRIBUNAL VERDICT</div>
-          <div className="font-staatliches text-base md:text-xl tracking-widest mb-2" style={{ color: "var(--ink-text)" }}>
-            {existingDispute.outcome}
-          </div>
-          <p className="font-nunito text-base" style={{ color: "var(--dim-label)" }}>{existingDispute.summary}</p>
-        </div>
+          {existingDispute.fetchedSourceEvidence.length > 0 && (
+            <div>
+              <div className="font-exo text-xs tracking-widest mb-2" style={{ color: "var(--dim-label)" }}>
+                FETCHED SOURCES
+              </div>
+              <FetchedSourceEvidence sources={existingDispute.fetchedSourceEvidence} />
+            </div>
+          )}
+        </>
       )}
 
       {disputeWindowOpen && !existingDispute && (
-        <ObjectionSlip wagerId={wagerId} onSubmit={onDispute} />
+        <ObjectionSlip
+          wagerId={wagerId}
+          primarySource={primarySource}
+          fallbackSource={fallbackSource}
+          onSubmit={onDispute}
+        />
       )}
 
       {/* Why GenLayer */}

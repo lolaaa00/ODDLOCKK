@@ -46,6 +46,7 @@ export type OnChainSettlement = {
   reportId: string;
   wagerId: string;
   reportType: string;
+  fetchedSourceEvidence?: FetchedSourceEvidence[];
   outcome: string;
   confidence: number;
   winningSide: string;
@@ -64,6 +65,7 @@ export type OnChainDispute = {
   reportId: string;
   wagerId: string;
   reportType: string;
+  fetchedSourceEvidence?: FetchedSourceEvidence[];
   ground: string;
   outcome: string;
   confidence: number;
@@ -74,6 +76,14 @@ export type OnChainDispute = {
   responsibleUseNote: string;
   createdAt: number;
   createdBy: string;
+};
+
+export type FetchedSourceEvidence = {
+  sourceTier: string;
+  sourceUrl: string;
+  content: string;
+  fetchStatus: string;
+  fetchError: string;
 };
 
 export type ProtocolStats = {
