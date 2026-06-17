@@ -43,13 +43,11 @@ If cancellation or postponement applies, apply the locked cancellation/postponem
 Return strict JSON only. No markdown. No text outside JSON.
 
 IMPORTANT — SOURCE EVIDENCE:
-The settlement packet includes "fetchedSourceEvidence", which contains the actual page
-content fetched from the locked PRIMARY and FALLBACK source URLs via GenLayer web API.
-You MUST base your findings on this fetched content. If a source fetch failed
-(fetchStatus="FETCH_FAILED"), note this in ambiguityNotes. If both sources failed
-to fetch, return MORE_EVIDENCE_REQUIRED unless the user-submitted evidence items
-contain concrete, verifiable findings tied to the locked source URLs.
-Cross-check user-submitted evidence against the fetched source content where possible.
+The settlement packet includes "fetchedSourceEvidence" when the deployed runtime
+exposes a supported web-fetch helper. If it is present, base findings on that
+fetched content. If no supported fetch helper is available, rely on the
+user-submitted evidence items tied to the locked source URLs. Cross-check
+user-submitted evidence against fetched content where possible.
 
 Responsible-use blocked category rule:
 {blocked_category_note}
@@ -110,11 +108,12 @@ If more evidence is needed, return MORE_EVIDENCE_REQUIRED.
 Return strict JSON only. No markdown. No text outside JSON.
 
 IMPORTANT — SOURCE EVIDENCE:
-The dispute packet includes "fetchedSourceEvidence" with actual page content fetched
-from the locked PRIMARY and FALLBACK source URLs via GenLayer web API.
-Use this fetched content to verify the disputant's claims and cross-check
-the original settlement findings. If source content has changed since the
-original settlement, note this in ambiguityNotes.
+The dispute packet includes "fetchedSourceEvidence" when the deployed runtime
+exposes a supported web-fetch helper. If it is present, use it to verify the
+disputant's claims and cross-check the original settlement findings. If no
+supported fetch helper is available, rely on the user-submitted evidence tied to
+the locked source URLs. If source content has changed since the original
+settlement, note this in ambiguityNotes.
 
 Responsible-use blocked category rule:
 {blocked_category_note}
@@ -622,7 +621,7 @@ class OddLockReferee(gl.Contract):
         packet = _json_loads_object(settlement_packet_json, "settlement_packet_json_must_be_valid_object")
         self._validate_settlement_packet(packet, terms)
 
-        # ── Fetch locked sources via GenLayer nondeterministic web API ──
+        # ── Fetch locked sources via any supported GenLayer nondeterministic web helper ──
         fetched_sources = self._fetch_locked_sources(terms)
         packet["fetchedSourceEvidence"] = fetched_sources
 
@@ -712,8 +711,8 @@ class OddLockReferee(gl.Contract):
     def _fetch_locked_sources(self, terms):
         """
         Fetch content from the locked primary and fallback source URLs
-        using GenLayer's nondeterministic web API. Returns a list of
-        source evidence objects with the fetched content or fetch errors.
+        using any supported GenLayer nondeterministic web helper. Returns
+        a list of source evidence objects with fetched content or fetch errors.
         """
         sources_to_fetch = []
         primary_url = str(terms.get("primarySource", "")).strip()
@@ -723,17 +722,32 @@ class OddLockReferee(gl.Contract):
         if fallback_url:
             sources_to_fetch.append(("FALLBACK", fallback_url))
 
+        nondet = getattr(gl, "nondet", None)
+        fetcher = None
+        if nondet is not None:
+            for attr in ("get_webpage", "fetch_webpage", "fetch_url", "get_url"):
+                candidate = getattr(nondet, attr, None)
+                if callable(candidate):
+                    fetcher = candidate
+                    break
+
+        if fetcher is None:
+            return []
+
         fetched = []
         for tier, url in sources_to_fetch:
             entry = {"sourceTier": tier, "sourceUrl": url, "content": "", "fetchStatus": "OK", "fetchError": ""}
             try:
-                page_content = gl.nondet.get_webpage(url, mode="text")
+                try:
+                    page_content = fetcher(url, mode="text")
+                except TypeError:
+                    page_content = fetcher(url)
                 text = str(page_content).strip()
                 # Truncate to avoid overloading the prompt
                 if len(text) > 4000:
                     text = text[:4000] + "\n[…truncated]"
                 entry["content"] = text
-            except (RuntimeError, OSError) as fetch_err:
+            except (RuntimeError, OSError, TypeError, AttributeError) as fetch_err:
                 entry["fetchStatus"] = "FETCH_FAILED"
                 entry["fetchError"] = _clip(str(fetch_err), 300)
             fetched.append(entry)

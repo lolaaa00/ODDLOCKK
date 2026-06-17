@@ -272,7 +272,7 @@ export default function SettlePage() {
                   <div className="space-y-3">
                     <p className="font-nunito text-sm" style={{ color: "var(--dim-label)" }}>
                       Describe what each locked source shows about the outcome.
-                      The contract will also fetch source content directly via GenLayer web API.
+                      When the deployed runtime supports it, the contract can also fetch source content via a GenLayer web helper.
                     </p>
                     {evidenceItems.map((e, i) => (
                       <div key={i} className="rounded p-3 space-y-2" style={{ border: "1px solid rgba(240,230,226,0.1)", background: "rgba(62,34,32,0.50)" }}>

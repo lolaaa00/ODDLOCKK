@@ -27,10 +27,10 @@ OddLock does **not** ask GenLayer to create bets. It asks GenLayer to referee lo
 When settlement is requested, the contract:
 
 1. Requires user-submitted evidence findings for each locked source URL
-2. Fetches the locked PRIMARY and FALLBACK source URLs via `gl.nondet.get_webpage()` (GenLayer nondeterministic web API)
-3. Passes both the user-submitted and contract-fetched source content to the GenLayer LLM referee
-4. Stores the fetched source records with the settlement/dispute report
-5. The referee cross-checks user claims against fetched content, applies locked rules, and returns a structured verdict
+2. Uses a supported GenLayer nondeterministic web helper to fetch the locked PRIMARY and FALLBACK source URLs when the deployed runtime exposes one
+3. Passes both the user-submitted findings and any fetched source content to the GenLayer LLM referee
+4. Stores the fetched source records with the settlement/dispute report when available
+5. The referee cross-checks user claims against source-linked evidence, applies locked rules, and returns a structured verdict
 
 Settlement and dispute packets are rejected unless their evidence URLs match the locked primary/fallback sources. The resolution room displays the fetched source records, source assessments, rule application, and evidence trace so the source path is visible after the verdict.
 
@@ -75,7 +75,7 @@ No Privy. No Firebase. No Supabase. No OpenAI. No external AI. No real-money pay
 Contract name: `OddLockReferee`  
 File: `contracts/OddLockReferee.py`
 
-Current deployed address: `0xC2DBe9C792717A89c1BFA6F532d5105b13A4E755`
+Current deployed address: `0x7C803ea4C771d2fDA48C67F53e2921A01cFaadd2`
 
 Deploy to GenLayer Studionet, then set `NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS` in `.env.local`.
 
