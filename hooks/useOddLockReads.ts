@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useReducer, useEffect, useCallback } from "react";
 import { isContractConfigured } from "@/lib/genlayerClient";
 import {
   readGetWager,
@@ -16,21 +16,43 @@ import {
 
 // ── Generic fetch hook ───────────────────────────────────────────────────────
 
-function useContractRead<T>(
-  fetcher: (() => Promise<T>) | null,
-  deps: unknown[] = []
-) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>("");
+type ReadState<T> = {
+  data: T | null;
+  loading: boolean;
+  error: string;
+};
+
+type ReadAction<T> =
+  | { type: "start" }
+  | { type: "success"; data: T }
+  | { type: "error"; error: string };
+
+function readReducer<T>(state: ReadState<T>, action: ReadAction<T>): ReadState<T> {
+  switch (action.type) {
+    case "start":
+      return { ...state, loading: true, error: "" };
+    case "success":
+      return { data: action.data, loading: false, error: "" };
+    case "error":
+      return { ...state, loading: false, error: action.error };
+    default:
+      return state;
+  }
+}
+
+function useContractRead<T>(fetcher: (() => Promise<T>) | null) {
+  const [state, dispatch] = useReducer(readReducer<T>, {
+    data: null,
+    loading: false,
+    error: "",
+  });
 
   const refetch = useCallback(async () => {
     if (!fetcher || !isContractConfigured()) return;
-    setLoading(true);
-    setError("");
+    dispatch({ type: "start" });
     try {
       const result = await fetcher();
-      setData(result);
+      dispatch({ type: "success", data: result });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (
@@ -39,29 +61,25 @@ function useContractRead<T>(
         msg.includes("NetworkError") ||
         msg.includes("ECONNREFUSED")
       ) {
-        setError("GenLayer backend is currently unreachable.");
+        dispatch({ type: "error", error: "GenLayer backend is currently unreachable." });
       } else {
-        setError(msg);
+        dispatch({ type: "error", error: msg });
       }
-    } finally {
-      setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [fetcher]);
 
   useEffect(() => {
     refetch();
   }, [refetch]);
 
-  return { data, loading, error, refetch };
+  return { data: state.data, loading: state.loading, error: state.error, refetch };
 }
 
 // ── Specific hooks ───────────────────────────────────────────────────────────
 
 export function useWager(wagerId: string | undefined) {
   return useContractRead<OnChainWager>(
-    wagerId ? () => readGetWager(wagerId) : null,
-    [wagerId]
+    wagerId ? () => readGetWager(wagerId) : null
   );
 }
 
@@ -72,38 +90,52 @@ export function useUserWagers(address: string | undefined) {
     error: idsError,
     refetch: refetchIds,
   } = useContractRead<string[]>(
-    address ? () => readGetUserWagers(address) : null,
-    [address]
+    address ? () => readGetUserWagers(address) : null
   );
 
-  const [wagers, setWagers] = useState<OnChainWager[]>([]);
-  const [wagersLoading, setWagersLoading] = useState(false);
+  const [fetchedWagers, dispatchWagers] = useReducer(
+    (
+      state: { wagers: OnChainWager[]; loading: boolean },
+      action:
+        | { type: "start" }
+        | { type: "success"; wagers: OnChainWager[] }
+        | { type: "error" }
+    ) => {
+      switch (action.type) {
+        case "start":
+          return { ...state, loading: true };
+        case "success":
+          return { wagers: action.wagers, loading: false };
+        case "error":
+          return { ...state, loading: false, wagers: [] };
+        default:
+          return state;
+      }
+    },
+    { wagers: [], loading: false }
+  );
 
   useEffect(() => {
-    if (!ids || ids.length === 0) {
-      setWagers([]);
-      return;
-    }
+    if (!ids || ids.length === 0) return;
     let cancelled = false;
-    setWagersLoading(true);
+    dispatchWagers({ type: "start" });
     Promise.all(ids.map((id) => readGetWager(id)))
       .then((results) => {
-        if (!cancelled) setWagers(results);
+        if (!cancelled) dispatchWagers({ type: "success", wagers: results });
       })
       .catch(() => {
-        if (!cancelled) setWagers([]);
-      })
-      .finally(() => {
-        if (!cancelled) setWagersLoading(false);
+        if (!cancelled) dispatchWagers({ type: "error" });
       });
     return () => {
       cancelled = true;
     };
   }, [ids]);
 
+  const wagers = ids && ids.length > 0 ? fetchedWagers.wagers : [];
+
   return {
     wagers,
-    loading: idsLoading || wagersLoading,
+    loading: idsLoading || (ids && ids.length > 0 ? fetchedWagers.loading : false),
     error: idsError,
     refetch: refetchIds,
   };
@@ -113,8 +145,7 @@ export function useSettlement(reportId: string | undefined) {
   return useContractRead<OnChainSettlement>(
     reportId && reportId.length > 0
       ? () => readGetSettlement(reportId)
-      : null,
-    [reportId]
+      : null
   );
 }
 
@@ -122,14 +153,10 @@ export function useDispute(reportId: string | undefined) {
   return useContractRead<OnChainDispute>(
     reportId && reportId.length > 0
       ? () => readGetDispute(reportId)
-      : null,
-    [reportId]
+      : null
   );
 }
 
 export function useProtocolStats() {
-  return useContractRead<ProtocolStats>(
-    () => readGetProtocolStats(),
-    []
-  );
+  return useContractRead<ProtocolStats>(() => readGetProtocolStats());
 }

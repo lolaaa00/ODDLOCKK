@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 :root {
+  --font-staatliches: "Arial Narrow", "Impact", "Haettenschweiler", "Franklin Gothic Condensed", sans-serif;
+  --font-changa-one: "Trebuchet MS", "Segoe UI", Arial, sans-serif;
+  --font-nunito-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-azeret-mono: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+  --font-exo-2: "Segoe UI", "Trebuchet MS", Arial, sans-serif;
+
   /* ── Core palette ── */
   --wine:        #1A0A08;
   --wine-2:      #2A100C;

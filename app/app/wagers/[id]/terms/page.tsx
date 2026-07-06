@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { getDrafts } from "@/lib/storage/drafts";
 import { TermsLockPanel } from "@/components/wagers/TermsLockPanel";
 import { sha256Hex } from "@/lib/utils";
-import type { LocalDraft } from "@/types/wager";
 
 export default function TermsPage() {
   const { id } = useParams<{ id: string }>();
-  const [draft, setDraft] = useState<LocalDraft | null>(null);
+  const draft = useSyncExternalStore(
+    () => () => {},
+    () => getDrafts().find((d) => d.draftId === id) ?? null,
+    () => null
+  );
   const [termsHash, setTermsHash] = useState("");
-
-  useEffect(() => {
-    setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
-  }, [id]);
 
   useEffect(() => {
     if (!draft?.terms) return;
@@ -25,8 +24,7 @@ export default function TermsPage() {
       if (!cancelled) setTermsHash(h);
     });
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [draft]);
 
   if (!draft) return null;
 

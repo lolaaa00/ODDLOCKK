@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Plus, FileText, RefreshCw, AlertTriangle, Layers } from "lucide-react";
 import { getDrafts } from "@/lib/storage/drafts";
@@ -12,10 +12,12 @@ import type { LocalDraft } from "@/types/wager";
 import { formatTimestamp, formatWeiToGen } from "@/lib/utils";
 
 export default function WagersPage() {
-  const [drafts, setDrafts] = useState<LocalDraft[]>([]);
   const { address, isConnected } = useGenLayer();
-
-  useEffect(() => { setDrafts(getDrafts()); }, []);
+  const drafts = useSyncExternalStore(
+    () => () => {},
+    () => getDrafts(),
+    () => [] as LocalDraft[]
+  );
 
   const { wagers: chainWagers, loading, error: loadError, refetch } = useUserWagers(address);
 

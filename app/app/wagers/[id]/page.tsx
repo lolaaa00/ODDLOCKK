@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -34,21 +34,17 @@ export default function WagerDetailPage() {
   const router = useRouter();
   const { address, provider, isConnected, canWrite } = useGenLayer();
 
-  // Local draft — load from localStorage after mount to avoid SSR hydration mismatch.
-  const [draft, setDraft] = useState<LocalDraft | null>(null);
-  const [draftChecked, setDraftChecked] = useState(false);
-  useEffect(() => {
-    setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
-    setDraftChecked(true);
-  }, [id]);
+  const draft = useSyncExternalStore(
+    () => () => {},
+    () => getDrafts().find((d) => d.draftId === id) ?? null,
+    () => null
+  );
 
   // Resolve the on-chain wager ID.
   // Don't resolve until draftChecked to avoid a flash fetch with the raw URL id.
   // contractWagerId is always a real wager_* ID (never pending_*) after publish.
   const contractWagerId = draft?.contractWagerId || "";
-  const onChainId = !draftChecked
-    ? undefined                              // wait for localStorage check
-    : contractWagerId || (draft ? undefined : id);
+  const onChainId = contractWagerId || (draft ? undefined : id);
 
   // Contract reads — only fetch if we have a contractWagerId or this isn't a draft
   const { data: wager, loading, error: loadError, refetch } = useWager(onChainId);
@@ -240,7 +236,6 @@ export default function WagerDetailPage() {
         );
         // Still save the tx hash so the user can track it
         publishDraft(draft.draftId, "", hash, CONTRACT_ADDRESS, CHAIN_ID);
-        setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
         setPublishStatus("error");
         return;
       }
@@ -248,9 +243,6 @@ export default function WagerDetailPage() {
       // ── Save the real wager ID ─────────────────────────────────────
       console.log("[OddLock:PUBLISH] Storing real contractWagerId:", contractWagerId);
       publishDraft(draft.draftId, contractWagerId, hash, CONTRACT_ADDRESS, CHAIN_ID);
-
-      // Refresh the local draft state
-      setDraft(getDrafts().find((d) => d.draftId === id) ?? null);
       setPublishStatus("done");
 
       // Refetch the on-chain wager data

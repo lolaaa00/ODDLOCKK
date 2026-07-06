@@ -66,11 +66,7 @@ export function useOddLockPermissions(
 
   // Fetch keeper/admin status when address changes
   useEffect(() => {
-    if (!address) {
-      setIsKeeper(false);
-      setIsAdmin(false);
-      return;
-    }
+    if (!address) return;
     let cancelled = false;
 
     readIsKeeper(address)

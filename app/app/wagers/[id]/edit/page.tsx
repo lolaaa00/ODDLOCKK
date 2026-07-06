@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useSyncExternalStore } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { getDrafts } from "@/lib/storage/drafts";
@@ -57,18 +57,14 @@ function draftToForm(draft: LocalDraft): Partial<FormState> {
 
 export default function EditDraftPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const [draft, setDraft] = useState<LocalDraft | null>(null);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const found = getDrafts().find((d) => d.draftId === id) ?? null;
-    setDraft(found);
-    setLoaded(true);
-  }, [id]);
+  const draft = useSyncExternalStore(
+    () => () => {},
+    () => getDrafts().find((d) => d.draftId === id) ?? null,
+    () => null
+  );
 
   // Block editing published drafts
-  if (loaded && draft?.contractWagerId) {
+  if (draft?.contractWagerId) {
     return (
       <div className="max-w-2xl mx-auto space-y-6 route-in">
         <Link href={`/app/wagers/${id}`} className="font-exo text-xs tracking-widest" style={{ color: "var(--dim-label)" }}>
@@ -84,7 +80,7 @@ export default function EditDraftPage() {
   }
 
   // Not found
-  if (loaded && !draft) {
+  if (!draft) {
     return (
       <div className="max-w-2xl mx-auto space-y-6 route-in">
         <Link href="/app/wagers" className="font-exo text-xs tracking-widest" style={{ color: "var(--dim-label)" }}>
@@ -95,15 +91,6 @@ export default function EditDraftPage() {
             Draft not found.
           </p>
         </div>
-      </div>
-    );
-  }
-
-  if (!draft) {
-    return (
-      <div className="flex items-center gap-2 py-24 justify-center">
-        <div className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--bio-glow)" }} />
-        <span className="font-exo text-xs tracking-widest" style={{ color: "var(--dim-label)" }}>LOADING…</span>
       </div>
     );
   }

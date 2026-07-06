@@ -34,7 +34,7 @@ When settlement is requested, the contract:
 
 Settlement and dispute packets are rejected unless their evidence URLs match the locked primary/fallback sources. The resolution room displays the fetched source records, source assessments, rule application, and evidence trace so the source path is visible after the verdict.
 
-OddLock uses coarse wall-clock timestamps for lifecycle windows because the current Studionet contract runtime used here does not expose a consensus block timestamp. Those checks are limited to hour/day-sized windows; verdicts are grounded in locked terms and fetched source evidence.
+OddLock uses coarse wall-clock timestamps only for lifecycle windows because the current Studionet contract runtime used here does not expose a consensus block timestamp. Those checks are limited to hour/day-sized windows, while verdicts are still grounded in locked terms and fetched source evidence.
 
 ---
 
