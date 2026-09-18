@@ -112,8 +112,10 @@ export type FetchedSourceEvidence = {
   sourceTier: "PRIMARY" | "FALLBACK";
   sourceUrl: string;
   content: string;
-  fetchStatus: "OK" | "FETCH_FAILED";
+  fetchStatus: "OK" | "FETCH_FAILED" | "NO_FETCHER";
   fetchError: string;
+  contentLength?: number;
+  truncated?: boolean;
 };
 
 export type SettlementReport = {

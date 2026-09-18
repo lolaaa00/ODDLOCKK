@@ -84,6 +84,8 @@ export type FetchedSourceEvidence = {
   content: string;
   fetchStatus: string;
   fetchError: string;
+  contentLength?: number;
+  truncated?: boolean;
 };
 
 export type ProtocolStats = {

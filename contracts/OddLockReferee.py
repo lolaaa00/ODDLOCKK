@@ -42,12 +42,16 @@ If sources conflict, apply the locked conflict rule.
 If cancellation or postponement applies, apply the locked cancellation/postponement rule.
 Return strict JSON only. No markdown. No text outside JSON.
 
-IMPORTANT — SOURCE EVIDENCE:
-The settlement packet includes "fetchedSourceEvidence" when the deployed runtime
-exposes a supported web-fetch helper. If it is present, base findings on that
-fetched content. If no supported fetch helper is available, rely on the
-user-submitted evidence items tied to the locked source URLs. Cross-check
-user-submitted evidence against fetched content where possible.
+IMPORTANT — SOURCE EVIDENCE (GROUNDING RULE):
+The settlement packet includes "fetchedSourceEvidence" — content fetched
+directly from the locked source URLs by this contract via GenLayer's
+nondeterministic web API (gl.nondet.get_webpage). This fetched content is
+the PRIMARY basis for your verdict. User-submitted evidence items are
+SECONDARY — use them only to guide which parts of the fetched content to
+focus on. If fetched content contradicts user-submitted evidence, trust
+the fetched content. If fetchStatus is "FETCH_FAILED" or "NO_FETCHER",
+note this in ambiguityNotes and rely on user-submitted evidence as fallback.
+Always cite specific passages from fetched content in your evidenceTrace.
 
 Responsible-use blocked category rule:
 {blocked_category_note}
@@ -107,13 +111,16 @@ If the original outcome is clearly wrong under the locked rules, return REVERSE,
 If more evidence is needed, return MORE_EVIDENCE_REQUIRED.
 Return strict JSON only. No markdown. No text outside JSON.
 
-IMPORTANT — SOURCE EVIDENCE:
-The dispute packet includes "fetchedSourceEvidence" when the deployed runtime
-exposes a supported web-fetch helper. If it is present, use it to verify the
-disputant's claims and cross-check the original settlement findings. If no
-supported fetch helper is available, rely on the user-submitted evidence tied to
-the locked source URLs. If source content has changed since the original
-settlement, note this in ambiguityNotes.
+IMPORTANT — SOURCE EVIDENCE (GROUNDING RULE):
+The dispute packet includes "fetchedSourceEvidence" — content fetched
+directly from the locked source URLs by this contract via GenLayer's
+nondeterministic web API (gl.nondet.get_webpage). This fetched content is
+the PRIMARY basis for evaluating the dispute. Use it to verify the
+disputant's claims and cross-check the original settlement findings.
+If fetchStatus is "FETCH_FAILED" or "NO_FETCHER", note this in
+ambiguityNotes and rely on user-submitted evidence as fallback. If source
+content has changed since the original settlement, note this in
+ambiguityNotes. Always cite specific passages from fetched content.
 
 Responsible-use blocked category rule:
 {blocked_category_note}
@@ -709,11 +716,6 @@ class OddLockReferee(gl.Contract):
         return dispute_report_id
 
     def _fetch_locked_sources(self, terms):
-        """
-        Fetch content from the locked primary and fallback source URLs
-        using any supported GenLayer nondeterministic web helper. Returns
-        a list of source evidence objects with fetched content or fetch errors.
-        """
         sources_to_fetch = []
         primary_url = str(terms.get("primarySource", "")).strip()
         fallback_url = str(terms.get("fallbackSource", "")).strip()
@@ -732,20 +734,21 @@ class OddLockReferee(gl.Contract):
                     break
 
         if fetcher is None:
-            return []
+            return [{"sourceTier": tier, "sourceUrl": url, "content": "", "fetchStatus": "NO_FETCHER", "fetchError": "No supported web-fetch helper found in this runtime.", "contentLength": 0, "truncated": False} for tier, url in sources_to_fetch]
 
         fetched = []
         for tier, url in sources_to_fetch:
-            entry = {"sourceTier": tier, "sourceUrl": url, "content": "", "fetchStatus": "OK", "fetchError": ""}
+            entry = {"sourceTier": tier, "sourceUrl": url, "content": "", "fetchStatus": "OK", "fetchError": "", "contentLength": 0, "truncated": False}
             try:
                 try:
                     page_content = fetcher(url, mode="text")
                 except TypeError:
                     page_content = fetcher(url)
                 text = str(page_content).strip()
-                # Truncate to avoid overloading the prompt
+                entry["contentLength"] = len(text)
                 if len(text) > 4000:
                     text = text[:4000] + "\n[…truncated]"
+                    entry["truncated"] = True
                 entry["content"] = text
             except (RuntimeError, OSError, TypeError, AttributeError) as fetch_err:
                 entry["fetchStatus"] = "FETCH_FAILED"

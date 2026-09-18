@@ -20,7 +20,8 @@ const GL = "rgba(107,7,14,0.08)";
 const GL_BORDER = "rgba(203,194,192,0.13)";
 
 export function SettlementDesk({ report, primarySource, fallbackSource }: Props) {
-  const [openSection, setOpenSection] = useState<string | null>("fetched");
+  const hasFetchedSources = report.fetchedSourceEvidence.length > 0;
+  const [openSection, setOpenSection] = useState<string | null>(hasFetchedSources ? "fetched" : "evidence");
 
   function toggle(s: string) {
     setOpenSection((c) => (c === s ? null : s));

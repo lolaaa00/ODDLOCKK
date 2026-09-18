@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useCallback, useMemo, useSyncExternalStore } from "react";
+import { useState, useCallback, useMemo, useSyncExternalStore, useRef, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Scale, AlertTriangle, Play, ExternalLink, Clock, Plus, Trash2 } from "lucide-react";
+import { Scale, AlertTriangle, Play, Clock, Plus, Trash2 } from "lucide-react";
 import { useGenLayer } from "@/lib/genlayer/useGenLayer";
 import { useWager, useSettlement } from "@/hooks/useOddLockReads";
 import { useOddLockWrites } from "@/hooks/useOddLockWrites";
 import { useOddLockPermissions } from "@/hooks/useOddLockPermissions";
-import { EXPLORER_URL, isContractConfigured } from "@/lib/genlayerClient";
+import { isContractConfigured } from "@/lib/genlayerClient";
+import { useConsensusStage } from "@/hooks/useConsensusStage";
+import { ConsensusTracker } from "@/components/settlement/ConsensusTracker";
 import { getDrafts } from "@/lib/storage/drafts";
 import { SettlementDesk } from "@/components/settlement/SettlementDesk";
 import type { SettlementReport } from "@/types/wager";
@@ -67,9 +69,20 @@ export default function SettlePage() {
 
   // Writes
   const { txStatus, txHash, txError, canWrite, openSettlement, requestSettlement } = useOddLockWrites();
+  const consensus = useConsensusStage();
 
   // Permissions
   const perms = useOddLockPermissions(wager);
+
+  // Bridge write hook status into consensus tracker
+  const prevTxStatusRef = useRef(txStatus);
+  useEffect(() => {
+    if (txStatus === prevTxStatusRef.current) return;
+    prevTxStatusRef.current = txStatus;
+    if (txStatus === "signing") consensus.markSigning();
+    else if (txStatus === "pending" && txHash) consensus.startTracking(txHash);
+    else if (txStatus === "error") consensus.markError();
+  }, [txStatus, txHash, consensus]);
 
   const deadlinePassed = wager ? now > wager.eventDeadline : false;
   const settlementOpensAtPassed = wager ? now >= wager.settlementOpensAt : false;
@@ -378,29 +391,16 @@ export default function SettlePage() {
         </div>
       )}
 
-      {/* Tx status */}
-      {txStatus === "signing" && (
-        <div className="flex items-center gap-2 rounded px-4 py-3" style={{ border: "1px solid rgba(200,155,60,0.25)", background: "rgba(200,155,60,0.06)" }}>
-          <div className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--dispute-signal)" }} />
-          <span className="font-azeret text-xs" style={{ color: "var(--dispute-signal)" }}>Waiting for wallet signature…</span>
-        </div>
+      {/* Consensus lifecycle tracker */}
+      {consensus.stage !== "idle" && (
+        <ConsensusTracker
+          stage={consensus.stage}
+          elapsed={consensus.elapsed}
+          hash={consensus.hash}
+          onRetry={wager && perms.canTriggerResolution ? handleRequestSettlement : undefined}
+        />
       )}
-      {txStatus === "pending" && (
-        <div className="space-y-1 rounded px-4 py-3" style={{ border: "1px solid rgba(240,230,226,0.15)", background: "rgba(107,7,14,0.08)" }}>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--bio-glow)" }} />
-            <span className="font-azeret text-xs" style={{ color: "var(--dim-label)" }}>Submitted, awaiting GenLayer consensus…</span>
-          </div>
-          {txHash && (
-            <a href={`${EXPLORER_URL}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 font-azeret text-xs" style={{ color: "rgba(240,230,226,0.55)" }}>
-              <ExternalLink className="h-3 w-3" />
-              {txHash.slice(0, 20)}…{txHash.slice(-8)}
-            </a>
-          )}
-        </div>
-      )}
-      {txStatus === "done" && (
+      {txStatus === "done" && consensus.stage === "idle" && (
         <div className="rounded px-4 py-3" style={{ border: "1px solid rgba(122,158,111,0.25)", background: "rgba(122,158,111,0.06)" }}>
           <span className="font-azeret text-xs" style={{ color: "var(--canopy)" }}>Transaction confirmed. Verdict loaded above.</span>
         </div>
