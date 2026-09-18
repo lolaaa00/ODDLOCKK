@@ -101,8 +101,8 @@ No Privy. No Firebase. No Supabase. No OpenAI. No external AI. No real-money pay
 Contract name: `OddLockReferee`
 File: `contracts/OddLockReferee.py`
 
-Current deployed address: `0x8b39c7924424Bbaa2Eb7356183eb5275388a469f`
-Explorer: [View on Studionet Explorer](https://explorer-studio.genlayer.com/address/0x8b39c7924424Bbaa2Eb7356183eb5275388a469f)
+Current deployed address: `0x91Bf4968f87942154CAb2b6ccc3e5C5169033f69`
+Explorer: [View on Studionet Explorer](https://explorer-studio.genlayer.com/contracts/0x91Bf4968f87942154CAb2b6ccc3e5C5169033f69)
 
 Deploy to GenLayer Studionet, then set `NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS` in `.env.local`.
 

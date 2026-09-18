@@ -1,4 +1,4 @@
-# v0.2.18
+# v0.3.0
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 from genlayer import *
 import json
@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 ALLOWED_WAGER_STATUS = (
     "INVITED", "ACCEPTED", "CREATOR_FUNDED", "COUNTERPARTY_FUNDED", "LOCKED",
     "SETTLEMENT_OPEN", "RESOLVED", "DISPUTED", "INVALID", "FINALIZED", "CANCELLED",
+    "ESCROW_LOCKED",
 )
 ALLOWED_SETTLEMENT_OUTCOMES = (
     "CREATOR_WINS", "COUNTERPARTY_WINS", "PUSH_REFUND", "INVALID", "MORE_EVIDENCE_REQUIRED",
@@ -45,13 +46,15 @@ Return strict JSON only. No markdown. No text outside JSON.
 IMPORTANT — SOURCE EVIDENCE (GROUNDING RULE):
 The settlement packet includes "fetchedSourceEvidence" — content fetched
 directly from the locked source URLs by this contract via GenLayer's
-nondeterministic web API (gl.nondet.get_webpage). This fetched content is
-the PRIMARY basis for your verdict. User-submitted evidence items are
-SECONDARY — use them only to guide which parts of the fetched content to
-focus on. If fetched content contradicts user-submitted evidence, trust
-the fetched content. If fetchStatus is "FETCH_FAILED" or "NO_FETCHER",
-note this in ambiguityNotes and rely on user-submitted evidence as fallback.
-Always cite specific passages from fetched content in your evidenceTrace.
+nondeterministic web API (gl.nondet.web.get(url)). Each record includes a
+SHA-256 contentDigest of the full fetched body and the HTTP status code.
+This fetched content is the PRIMARY basis for your verdict. User-submitted
+evidence items are SECONDARY — use them only to guide which parts of the
+fetched content to focus on. If fetched content contradicts user-submitted
+evidence, trust the fetched content. If fetchStatus is "FETCH_FAILED",
+you MUST return MORE_EVIDENCE_REQUIRED — never commit a winner verdict
+when the primary source fetch failed. Always cite specific passages from
+fetched content and reference the contentDigest in your evidenceTrace.
 
 Responsible-use blocked category rule:
 {blocked_category_note}
@@ -114,13 +117,14 @@ Return strict JSON only. No markdown. No text outside JSON.
 IMPORTANT — SOURCE EVIDENCE (GROUNDING RULE):
 The dispute packet includes "fetchedSourceEvidence" — content fetched
 directly from the locked source URLs by this contract via GenLayer's
-nondeterministic web API (gl.nondet.get_webpage). This fetched content is
-the PRIMARY basis for evaluating the dispute. Use it to verify the
-disputant's claims and cross-check the original settlement findings.
-If fetchStatus is "FETCH_FAILED" or "NO_FETCHER", note this in
-ambiguityNotes and rely on user-submitted evidence as fallback. If source
-content has changed since the original settlement, note this in
-ambiguityNotes. Always cite specific passages from fetched content.
+nondeterministic web API (gl.nondet.web.get(url)). Each record includes a
+SHA-256 contentDigest and HTTP status. This fetched content is the PRIMARY
+basis for evaluating the dispute. Use it to verify the disputant's claims
+and cross-check the original settlement findings. If fetchStatus is
+"FETCH_FAILED", you MUST return MORE_EVIDENCE_REQUIRED — never commit a
+verdict when source fetches failed. If source content has changed since
+the original settlement (compare contentDigest values), note this in
+ambiguityNotes. Always cite specific passages and reference contentDigest.
 
 Responsible-use blocked category rule:
 {blocked_category_note}
@@ -214,7 +218,28 @@ def _is_nonempty_str(value):
 
 def _is_public_url(value):
     text = str(value).strip().lower()
-    return text.startswith("https://") or text.startswith("http://")
+    if not text.startswith("https://"):
+        return False
+    after_scheme = text[8:]
+    if not after_scheme or after_scheme[0] in (":", "@", "/"):
+        return False
+    host_part = after_scheme.split("/")[0].split(":")[0]
+    if host_part in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]"):
+        return False
+    if host_part.startswith("10.") or host_part.startswith("192.168."):
+        return False
+    if host_part.startswith("172."):
+        parts = host_part.split(".")
+        if len(parts) >= 2:
+            try:
+                second = int(parts[1])
+                if 16 <= second <= 31:
+                    return False
+            except (ValueError, TypeError):
+                pass
+    if "@" in text[:text.find("/", 8)] if "/" in text[8:] else "@" in text:
+        return False
+    return True
 
 
 def _clip(value, limit):
@@ -312,10 +337,13 @@ def _extract_json_object(raw):
 def _settlement_equivalence_principle():
     return (
         "Two OddLock settlement outputs are equivalent if they agree on outcome, "
-        "winningSide, and the material rule application. Both must apply only the "
-        "locked wager terms and must preserve the responsible-use rule that this is "
-        "testnet-only and not real-money gambling. Exact wording of summary, traces, "
-        "and notes does not need to match."
+        "winningSide, and the material rule application, AND both ground their "
+        "verdict in the same fetched source content (matching contentDigest). "
+        "Both must apply only the locked wager terms. Both must return "
+        "MORE_EVIDENCE_REQUIRED when the primary source fetch failed. Both must "
+        "preserve the responsible-use rule that this is testnet-only and not "
+        "real-money gambling. Exact wording of summary, traces, and notes does "
+        "not need to match."
     )
 
 
@@ -323,9 +351,11 @@ def _dispute_equivalence_principle():
     return (
         "Two OddLock dispute-review outputs are equivalent if they agree on dispute "
         "outcome and materially agree on whether the original settlement should be "
-        "upheld, reversed, refunded, invalidated, reopened, or require more evidence. "
-        "Both must apply only the locked terms and preserve the testnet-only limitation. "
-        "Exact wording does not need to match."
+        "upheld, reversed, refunded, invalidated, reopened, or require more evidence, "
+        "AND both ground their evaluation in the same fetched source content "
+        "(matching contentDigest). Both must return MORE_EVIDENCE_REQUIRED when the "
+        "primary source fetch failed. Both must apply only the locked terms and "
+        "preserve the testnet-only limitation. Exact wording does not need to match."
     )
 
 
@@ -537,7 +567,9 @@ class OddLockReferee(gl.Contract):
     @gl.public.write
     def finalize_wager(self, wager_id: str) -> str:
         wager = self._load_wager(wager_id)
-        _require(wager.get("status", "") == "RESOLVED", "wager_must_be_resolved_to_finalize")
+        current_status = wager.get("status", "")
+        _require(current_status != "DISPUTED", "wager_escrow_locked_more_evidence_required")
+        _require(current_status == "RESOLVED", "wager_must_be_resolved_to_finalize")
         terms = wager.get("terms", {})
         dispute_hours = _safe_int(terms.get("disputeWindowHours", 24), 24)
         if dispute_hours < 0:
@@ -628,16 +660,35 @@ class OddLockReferee(gl.Contract):
         packet = _json_loads_object(settlement_packet_json, "settlement_packet_json_must_be_valid_object")
         self._validate_settlement_packet(packet, terms)
 
-        # ── Fetch locked sources via any supported GenLayer nondeterministic web helper ──
         fetched_sources = self._fetch_locked_sources(terms)
         packet["fetchedSourceEvidence"] = fetched_sources
 
-        prompt = SETTLEMENT_PROMPT.format(
-            blocked_category_note=BLOCKED_CATEGORY_NOTE,
-            wager_json=json.dumps(self._wager_prompt_view(wager), indent=2, sort_keys=True),
-            packet_json=json.dumps(self._packet_prompt_view(packet), indent=2, sort_keys=True),
+        any_primary_failed = any(
+            s.get("sourceTier") == "PRIMARY" and s.get("fetchStatus") != "OK"
+            for s in fetched_sources
         )
-        result = self._run_settlement_review(prompt)
+
+        if any_primary_failed:
+            result = {
+                "outcome": "MORE_EVIDENCE_REQUIRED",
+                "confidence": 0,
+                "winningSide": "N/A",
+                "summary": "Primary source fetch failed; cannot ground verdict in source content.",
+                "evidenceTrace": [],
+                "ruleApplication": [],
+                "sourceAssessment": [],
+                "ambiguityNotes": ["Primary source fetch failed — fail-closed, no verdict committed."],
+                "manipulationWarnings": [],
+                "responsibleUseNote": RESPONSIBLE_USE_NOTE,
+            }
+        else:
+            prompt = SETTLEMENT_PROMPT.format(
+                blocked_category_note=BLOCKED_CATEGORY_NOTE,
+                wager_json=json.dumps(self._wager_prompt_view(wager), indent=2, sort_keys=True),
+                packet_json=json.dumps(self._packet_prompt_view(packet), indent=2, sort_keys=True),
+            )
+            result = self._run_settlement_review(prompt)
+
         report_id = "report_" + _short_hash(wager_id + ":" + _json_dumps(result) + ":" + str(now))
         _require(report_id not in self.settlements, "settlement_report_already_exists")
         report = {"reportId": report_id, "wagerId": wager_id, "reportType": "SETTLEMENT", "createdAt": now, "createdBy": _sender()}
@@ -674,18 +725,33 @@ class OddLockReferee(gl.Contract):
         packet = _json_loads_object(dispute_packet_json, "dispute_packet_json_must_be_valid_object")
         self._validate_dispute_packet(packet, terms)
 
-        # ── Fetch locked sources for dispute re-evaluation ──
         fetched_sources = self._fetch_locked_sources(terms)
         packet["fetchedSourceEvidence"] = fetched_sources
 
-        original_report = self._get_latest_settlement_for_wager(wager)
-        prompt = DISPUTE_PROMPT.format(
-            blocked_category_note=BLOCKED_CATEGORY_NOTE,
-            wager_json=json.dumps(self._wager_prompt_view(wager), indent=2, sort_keys=True),
-            original_report_json=json.dumps(original_report, indent=2, sort_keys=True),
-            packet_json=json.dumps(self._packet_prompt_view(packet), indent=2, sort_keys=True),
+        any_primary_failed = any(
+            s.get("sourceTier") == "PRIMARY" and s.get("fetchStatus") != "OK"
+            for s in fetched_sources
         )
-        result = self._run_dispute_review(prompt)
+
+        if any_primary_failed:
+            result = {
+                "outcome": "MORE_EVIDENCE_REQUIRED",
+                "confidence": 0,
+                "summary": "Primary source fetch failed during dispute re-evaluation; cannot ground verdict.",
+                "evidenceTrace": [],
+                "ruleApplication": [],
+                "ambiguityNotes": ["Primary source fetch failed — fail-closed, dispute deferred."],
+                "responsibleUseNote": RESPONSIBLE_USE_NOTE,
+            }
+        else:
+            original_report = self._get_latest_settlement_for_wager(wager)
+            prompt = DISPUTE_PROMPT.format(
+                blocked_category_note=BLOCKED_CATEGORY_NOTE,
+                wager_json=json.dumps(self._wager_prompt_view(wager), indent=2, sort_keys=True),
+                original_report_json=json.dumps(original_report, indent=2, sort_keys=True),
+                packet_json=json.dumps(self._packet_prompt_view(packet), indent=2, sort_keys=True),
+            )
+            result = self._run_dispute_review(prompt)
         dispute_report_id = "dispute_" + _short_hash(wager_id + ":" + caller + ":" + _json_dumps(result) + ":" + str(now))
         _require(dispute_report_id not in self.disputes, "dispute_report_already_exists")
         dispute_report = {"reportId": dispute_report_id, "wagerId": wager_id, "reportType": "DISPUTE", "createdAt": now, "createdBy": caller, "ground": _clip(packet.get("ground", "UNSPECIFIED"), 120)}
@@ -700,17 +766,17 @@ class OddLockReferee(gl.Contract):
             wager["status"] = "RESOLVED"
         elif outcome == "REVERSE":
             wager["status"] = "RESOLVED"
-            self._reverse_original_settlement(wager)
+            self._create_superseding_settlement(wager, dispute_report_id, self._reverse_outcome(wager))
         elif outcome == "PUSH_REFUND":
             wager["status"] = "RESOLVED"
-            self._override_original_settlement(wager, "PUSH_REFUND")
+            self._create_superseding_settlement(wager, dispute_report_id, "PUSH_REFUND")
         elif outcome == "INVALIDATE":
             wager["status"] = "INVALID"
-            self._override_original_settlement(wager, "INVALID")
+            self._create_superseding_settlement(wager, dispute_report_id, "INVALID")
         elif outcome == "REOPEN_REVIEW":
             wager["status"] = "SETTLEMENT_OPEN"
         elif outcome == "MORE_EVIDENCE_REQUIRED":
-            wager["status"] = "RESOLVED"
+            wager["status"] = "DISPUTED"
         self.wagers[wager_id] = _json_dumps(wager)
         self._bump("totalDisputed")
         return dispute_report_id
@@ -724,33 +790,47 @@ class OddLockReferee(gl.Contract):
         if fallback_url:
             sources_to_fetch.append(("FALLBACK", fallback_url))
 
-        nondet = getattr(gl, "nondet", None)
-        fetcher = None
-        if nondet is not None:
-            for attr in ("get_webpage", "fetch_webpage", "fetch_url", "get_url"):
-                candidate = getattr(nondet, attr, None)
-                if callable(candidate):
-                    fetcher = candidate
-                    break
-
-        if fetcher is None:
-            return [{"sourceTier": tier, "sourceUrl": url, "content": "", "fetchStatus": "NO_FETCHER", "fetchError": "No supported web-fetch helper found in this runtime.", "contentLength": 0, "truncated": False} for tier, url in sources_to_fetch]
-
         fetched = []
         for tier, url in sources_to_fetch:
-            entry = {"sourceTier": tier, "sourceUrl": url, "content": "", "fetchStatus": "OK", "fetchError": "", "contentLength": 0, "truncated": False}
+            entry = {
+                "sourceTier": tier,
+                "sourceUrl": url,
+                "content": "",
+                "fetchStatus": "OK",
+                "fetchError": "",
+                "contentLength": 0,
+                "truncated": False,
+                "contentDigest": "",
+                "fetchMethod": "gl.nondet.web.get",
+                "httpStatus": 0,
+            }
+            if not _is_public_url(url):
+                entry["fetchStatus"] = "FETCH_FAILED"
+                entry["fetchError"] = "URL rejected: must be HTTPS with no private/loopback hosts or credentials"
+                fetched.append(entry)
+                continue
             try:
-                try:
-                    page_content = fetcher(url, mode="text")
-                except TypeError:
-                    page_content = fetcher(url)
-                text = str(page_content).strip()
+                response = gl.nondet.web.get(url)
+                entry["httpStatus"] = int(getattr(response, "status", 0))
+                if entry["httpStatus"] < 200 or entry["httpStatus"] >= 400:
+                    entry["fetchStatus"] = "FETCH_FAILED"
+                    entry["fetchError"] = "HTTP " + str(entry["httpStatus"])
+                    fetched.append(entry)
+                    continue
+                raw_body = getattr(response, "body", b"")
+                if isinstance(raw_body, bytes):
+                    text = raw_body.decode("utf-8", errors="replace")
+                else:
+                    text = str(raw_body)
+                text = text.strip()
+                full_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                entry["contentDigest"] = full_digest
                 entry["contentLength"] = len(text)
                 if len(text) > 4000:
                     text = text[:4000] + "\n[…truncated]"
                     entry["truncated"] = True
                 entry["content"] = text
-            except (RuntimeError, OSError, TypeError, AttributeError) as fetch_err:
+            except Exception as fetch_err:
                 entry["fetchStatus"] = "FETCH_FAILED"
                 entry["fetchError"] = _clip(str(fetch_err), 300)
             fetched.append(entry)
@@ -833,8 +913,8 @@ class OddLockReferee(gl.Contract):
         _require(_is_nonempty_str(terms.get("timezone", "")), "timezone_required")
         _require(_is_nonempty_str(terms.get("primarySource", "")), "primary_source_required")
         _require(_is_nonempty_str(terms.get("fallbackSource", "")), "fallback_source_required")
-        _require(_is_public_url(terms.get("primarySource", "")), "primary_source_must_be_public_url")
-        _require(_is_public_url(terms.get("fallbackSource", "")), "fallback_source_must_be_public_url")
+        _require(_is_public_url(terms.get("primarySource", "")), "primary_source_must_be_https_public_url")
+        _require(_is_public_url(terms.get("fallbackSource", "")), "fallback_source_must_be_https_public_url")
         _require(_is_nonempty_str(terms.get("conflictRule", "")), "conflict_rule_required")
         _require(_is_nonempty_str(terms.get("cancellationRule", "")), "cancellation_rule_required")
         _require(_is_nonempty_str(terms.get("postponementRule", "")), "postponement_rule_required")
@@ -1005,30 +1085,51 @@ class OddLockReferee(gl.Contract):
         _require(report_id in self.settlements, "settlement_report_not_found")
         return _json_loads_object(self.settlements[report_id], "stored_settlement_corrupted")
 
-    def _override_original_settlement(self, wager, new_outcome):
-        report = self._get_latest_settlement_for_wager(wager)
-        report["outcome"] = new_outcome
-        if new_outcome == "PUSH_REFUND":
-            report["winningSide"] = "BOTH_REFUND"
-        elif new_outcome == "INVALID":
-            report["winningSide"] = "N/A"
-        report["summary"] = _clip("Updated after dispute review: " + str(report.get("summary", "")), 1000)
-        self.settlements[report["reportId"]] = _json_dumps(report)
-
-    def _reverse_original_settlement(self, wager):
+    def _reverse_outcome(self, wager):
         report = self._get_latest_settlement_for_wager(wager)
         original = report.get("outcome", "")
         if original == "CREATOR_WINS":
-            report["outcome"] = "COUNTERPARTY_WINS"
-            report["winningSide"] = "COUNTERPARTY"
+            return "COUNTERPARTY_WINS"
         elif original == "COUNTERPARTY_WINS":
-            report["outcome"] = "CREATOR_WINS"
-            report["winningSide"] = "CREATOR"
+            return "CREATOR_WINS"
+        return "PUSH_REFUND"
+
+    def _create_superseding_settlement(self, wager, dispute_report_id, new_outcome):
+        original = self._get_latest_settlement_for_wager(wager)
+        now = _now_ms()
+        superseding_id = "report_" + _short_hash(
+            wager.get("wagerId", "") + ":supersede:" + dispute_report_id + ":" + str(now)
+        )
+        if new_outcome == "PUSH_REFUND":
+            winning_side = "BOTH_REFUND"
+        elif new_outcome == "CREATOR_WINS":
+            winning_side = "CREATOR"
+        elif new_outcome == "COUNTERPARTY_WINS":
+            winning_side = "COUNTERPARTY"
         else:
-            report["outcome"] = "PUSH_REFUND"
-            report["winningSide"] = "BOTH_REFUND"
-        report["summary"] = _clip("Reversed after dispute review: " + str(report.get("summary", "")), 1000)
-        self.settlements[report["reportId"]] = _json_dumps(report)
+            winning_side = "N/A"
+        superseding = {
+            "reportId": superseding_id,
+            "wagerId": wager.get("wagerId", ""),
+            "reportType": "SUPERSEDING_SETTLEMENT",
+            "supersedesReportId": original.get("reportId", ""),
+            "triggeredByDisputeId": dispute_report_id,
+            "outcome": new_outcome,
+            "confidence": original.get("confidence", 0),
+            "winningSide": winning_side,
+            "summary": _clip("Superseded after dispute: " + str(original.get("summary", "")), 1000),
+            "evidenceTrace": original.get("evidenceTrace", []),
+            "ruleApplication": original.get("ruleApplication", []),
+            "sourceAssessment": original.get("sourceAssessment", []),
+            "fetchedSourceEvidence": original.get("fetchedSourceEvidence", []),
+            "ambiguityNotes": original.get("ambiguityNotes", []),
+            "manipulationWarnings": original.get("manipulationWarnings", []),
+            "responsibleUseNote": RESPONSIBLE_USE_NOTE,
+            "createdAt": now,
+            "createdBy": _sender(),
+        }
+        self.settlements[superseding_id] = _json_dumps(superseding)
+        wager["settlementReportId"] = superseding_id
 
     def _wager_prompt_view(self, wager):
         return {"wagerId": wager.get("wagerId", ""), "creator": wager.get("creator", ""), "counterparty": wager.get("counterparty", ""), "question": wager.get("question", ""), "creatorSide": wager.get("creatorSide", ""), "counterpartySide": wager.get("counterpartySide", ""), "stakeAmountWei": wager.get("stakeAmountWei", "0"), "currencyMode": wager.get("currencyMode", "NATIVE_GEN_WEI"), "eventDeadline": wager.get("eventDeadline", 0), "settlementOpensAt": wager.get("settlementOpensAt", 0), "sourcePolicyId": wager.get("sourcePolicyId", ""), "termsHash": wager.get("termsHash", ""), "terms": wager.get("terms", {})}

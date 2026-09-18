@@ -10,7 +10,6 @@ interface Props {
 const STATUS_STYLES: Record<string, { color: string; label: string; icon: "ok" | "fail" | "none" }> = {
   OK: { color: "var(--canopy)", label: "FETCHED BY CONTRACT", icon: "ok" },
   FETCH_FAILED: { color: "var(--invalid-alert)", label: "FETCH FAILED", icon: "fail" },
-  NO_FETCHER: { color: "var(--dispute-signal)", label: "NO WEB HELPER", icon: "none" },
 };
 
 export function FetchedSourceEvidence({ sources }: Props) {
@@ -39,7 +38,7 @@ export function FetchedSourceEvidence({ sources }: Props) {
       >
         <Globe className="h-4 w-4 shrink-0" style={{ color: fetched.length > 0 ? "var(--canopy)" : "var(--invalid-alert)" }} />
         <span className="font-exo text-xs tracking-widest" style={{ color: fetched.length > 0 ? "var(--canopy)" : "var(--invalid-alert)" }}>
-          {fetched.length}/{sources.length} SOURCES FETCHED BY CONTRACT VIA gl.nondet.get_webpage()
+          {fetched.length}/{sources.length} SOURCES FETCHED BY CONTRACT VIA gl.nondet.web.get()
         </span>
         {failed.length > 0 && (
           <span className="font-azeret text-xs" style={{ color: "var(--invalid-alert)" }}>
@@ -85,8 +84,8 @@ export function FetchedSourceEvidence({ sources }: Props) {
               )}
             </div>
 
-            {/* URL */}
-            <div className="px-4 py-2" style={{ borderTop: "1px solid rgba(240,230,226,0.06)" }}>
+            {/* URL + proof metadata */}
+            <div className="px-4 py-2 space-y-1" style={{ borderTop: "1px solid rgba(240,230,226,0.06)" }}>
               <a
                 href={source.sourceUrl}
                 target="_blank"
@@ -96,6 +95,23 @@ export function FetchedSourceEvidence({ sources }: Props) {
               >
                 {source.sourceUrl}
               </a>
+              <div className="flex flex-wrap gap-3">
+                {source.httpStatus != null && source.httpStatus > 0 && (
+                  <span className="font-azeret text-xs" style={{ color: "var(--dim-label)" }}>
+                    HTTP {source.httpStatus}
+                  </span>
+                )}
+                {source.fetchMethod && (
+                  <span className="font-azeret text-xs" style={{ color: "var(--dim-label)" }}>
+                    via {source.fetchMethod}
+                  </span>
+                )}
+                {source.contentDigest && (
+                  <span className="font-azeret text-xs" style={{ color: "var(--canopy)" }} title={`SHA-256: ${source.contentDigest}`}>
+                    SHA-256: {source.contentDigest.slice(0, 16)}…
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Content or error */}

@@ -46,6 +46,8 @@ export type OnChainSettlement = {
   reportId: string;
   wagerId: string;
   reportType: string;
+  supersedesReportId?: string;
+  triggeredByDisputeId?: string;
   fetchedSourceEvidence?: FetchedSourceEvidence[];
   outcome: string;
   confidence: number;
@@ -86,6 +88,9 @@ export type FetchedSourceEvidence = {
   fetchError: string;
   contentLength?: number;
   truncated?: boolean;
+  contentDigest?: string;
+  fetchMethod?: string;
+  httpStatus?: number;
 };
 
 export type ProtocolStats = {
@@ -446,9 +451,17 @@ export async function writeRemoveKeeper(
 
 // ── Wait for tx ──────────────────────────────────────────────────────────────
 
-export async function waitForTx(hash: string): Promise<unknown> {
-  logContract("READ", "waitForTransactionReceipt", { hash });
+export async function waitForTx(
+  hash: string,
+  options?: { status?: string; interval?: number; retries?: number }
+): Promise<unknown> {
+  logContract("READ", "waitForTransactionReceipt", { hash, ...options });
   const client = getReadClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return client.waitForTransactionReceipt({ hash: hash as any });
+  return client.waitForTransactionReceipt({
+    hash: hash as any,
+    status: (options?.status ?? "ACCEPTED") as any,
+    interval: options?.interval ?? 4000,
+    retries: options?.retries ?? 120,
+  });
 }
